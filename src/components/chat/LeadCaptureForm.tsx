@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { X, Send, CheckCircle, Loader } from "lucide-react";
+import { withBase } from "@/lib/basePath";
 
 interface LeadFormData {
   name: string;
@@ -84,7 +85,7 @@ export default function LeadCaptureForm({
 
     setIsSubmitting(true);
     try {
-      const res = await fetch("/api/leads", {
+      const res = await fetch(withBase("/api/leads"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

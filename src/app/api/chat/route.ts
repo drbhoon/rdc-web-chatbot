@@ -18,7 +18,7 @@ import { generateAIResponse } from "@/lib/ai/aiService";
 import { performWebSearch, shouldUseWebSearch } from "@/lib/search/webSearch";
 import { handleEmployeeDirectoryMessage } from "@/lib/employee/directory";
 import { recordUnanswered } from "@/lib/knowledge/unanswered";
-import { rateLimited } from "@/lib/rateLimit";
+import { rateLimited, rateLimitedKey } from "@/lib/rateLimit";
 import { v4 as uuidv4 } from "uuid";
 
 export interface ChatRequest {
@@ -46,7 +46,9 @@ const SUPPORTED_LANGUAGE_OVERRIDES = new Set([
 ]);
 
 export async function POST(req: NextRequest) {
-  if (rateLimited(req, "chat")) return NextResponse.json({error: "Please try again in one minute."}, {status: 429});
+  // Per address the ceiling is generous (an office or a mobile network shares
+  // one IP); the per-conversation limit below is the real guard.
+  if (rateLimited(req, "chat", 120)) return NextResponse.json({error: "Please try again in one minute."}, {status: 429});
   const startTime = Date.now();
 
   let body: ChatRequest;
@@ -63,6 +65,9 @@ export async function POST(req: NextRequest) {
   }
 
   const existingSessionId = typeof requestedSessionId === "string" ? requestedSessionId : undefined;
+  if (existingSessionId && rateLimitedKey(`chat-session:${existingSessionId}`, 20)) {
+    return NextResponse.json({ error: "Please try again in one minute." }, { status: 429 });
+  }
 
   // ── 1. Session Management ──────────────────────────────────────────────────
   let sessionId = existingSessionId;

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimited } from "@/lib/rateLimit";
 
 const LANGUAGE_NAMES: Record<string, string> = {
   en: "Indian English",
@@ -19,10 +20,15 @@ function prepareSpeechText(value: string): string {
     .replace(/[*_~#`]/g, "")
     .replace(/\bRDC\b/g, "R D C")
     .trim()
-    .slice(0, 4000);
+    // An answer is 150-250 words; anything much longer is not a chat reply.
+    .slice(0, 2000);
 }
 
 export async function POST(request: NextRequest) {
+  // Each call is paid speech synthesis, and the endpoint is public.
+  if (rateLimited(request, "tts", 60)) {
+    return NextResponse.json({ error: "Please try again in one minute." }, { status: 429 });
+  }
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) {
     return NextResponse.json({ error: "Natural voice is not configured" }, { status: 503 });

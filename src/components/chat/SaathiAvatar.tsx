@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { withBase } from "@/lib/basePath";
 import { Mic, Sparkles, Volume2 } from "lucide-react";
 
 type AvatarMode = "idle" | "listening" | "thinking" | "speaking";
@@ -54,7 +55,7 @@ export default function SaathiAvatar({
         <div className="saathi-avatar-halo" />
         <div className="saathi-avatar-photo">
           <Image
-            src="/saathi-avatar-v2.png"
+            src={withBase("/saathi-avatar-v2.png")}
             alt=""
             fill
             priority
@@ -62,7 +63,7 @@ export default function SaathiAvatar({
             className={`saathi-face-frame ${mode !== "speaking" || speakingFrame === "rest" ? "is-visible" : ""}`}
           />
           <Image
-            src="/saathi-avatar-speak-soft.png"
+            src={withBase("/saathi-avatar-speak-soft.png")}
             alt=""
             fill
             priority
@@ -70,7 +71,7 @@ export default function SaathiAvatar({
             className={`saathi-face-frame ${mode === "speaking" && speakingFrame === "soft" ? "is-visible" : ""}`}
           />
           <Image
-            src="/saathi-avatar-speak-open.png"
+            src={withBase("/saathi-avatar-speak-open.png")}
             alt=""
             fill
             priority
@@ -79,7 +80,7 @@ export default function SaathiAvatar({
           />
           {mode !== "speaking" && (
             <Image
-              src="/saathi-avatar-blink.png"
+              src={withBase("/saathi-avatar-blink.png")}
               alt=""
               fill
               priority

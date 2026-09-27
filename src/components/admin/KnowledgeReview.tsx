@@ -1,10 +1,11 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { withBase } from "@/lib/basePath";
 export default function KnowledgeReview({token}: {token: string}) {
   const [questions, setQuestions] = useState<Array<{id: string; question: string; occurrences: number; reason: string}>>([]);
   const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false);
   const refresh = useCallback(async () => {
-    const res = await fetch("/api/admin/questions", {headers: {"x-admin-token": token}});
+    const res = await fetch(withBase("/api/admin/questions"), {headers: {"x-admin-token": token}});
     if (!res.ok) throw new Error("Could not load questions. Please sign in again.");
     setQuestions((await res.json()).questions);
   }, [token]);
@@ -12,7 +13,7 @@ export default function KnowledgeReview({token}: {token: string}) {
   async function download(all = false) {
     setBusy(true); setMessage("");
     try {
-      const res = await fetch(`/api/admin/questions?format=xlsx&all=${all}`, {headers: {"x-admin-token": token}});
+      const res = await fetch(withBase(`/api/admin/questions?format=xlsx&all=${all}`), {headers: {"x-admin-token": token}});
       if (!res.ok) throw new Error("Download failed. Please sign in again.");
       const url = URL.createObjectURL(await res.blob()); const a = document.createElement("a");
       a.href = url; a.download = "RDC-Unanswered-Questions.xlsx"; a.click(); URL.revokeObjectURL(url);
@@ -22,7 +23,7 @@ export default function KnowledgeReview({token}: {token: string}) {
     if (!file) return; setBusy(true); setMessage("Validating answers and updating knowledge…");
     try {
       const form = new FormData(); form.append("file", file);
-      const res = await fetch("/api/admin/questions", {method: "POST", headers: {"x-admin-token": token}, body: form});
+      const res = await fetch(withBase("/api/admin/questions"), {method: "POST", headers: {"x-admin-token": token}, body: form});
       const data = await res.json(); if (!res.ok) throw new Error(data.error);
       setMessage(`${data.published} answers published; ${data.skipped} unchanged. Ready for the next chat question.`); await refresh();
     } catch(e) {setMessage(e instanceof Error ? e.message : "Import failed");} finally {setBusy(false);}

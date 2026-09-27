@@ -1,6 +1,7 @@
 "use client";
 
 import KnowledgeReview from "@/components/admin/KnowledgeReview";
+import { withBase } from "@/lib/basePath";
 import React, { useState, useEffect, useCallback } from "react";
 import {
   BarChart3, MessageSquare, Users, Settings, LogOut,
@@ -51,7 +52,7 @@ interface AnalyticsData {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function AdminLogin({ onLogin }: { onLogin: (token: string) => void }) {
-  const [email, setEmail] = useState("admin@rdcconcrete.com");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -61,7 +62,7 @@ function AdminLogin({ onLogin }: { onLogin: (token: string) => void }) {
     setError("");
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/login", {
+      const res = await fetch(withBase("/api/admin/login"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
@@ -206,7 +207,7 @@ function AdminDashboard({ token, onLogout }: { token: string; onLogout: () => vo
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/admin/analytics", {
+      const res = await fetch(withBase("/api/admin/analytics"), {
         headers: { "x-admin-token": token },
       });
       if (!res.ok) {

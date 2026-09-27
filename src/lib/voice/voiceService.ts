@@ -1,3 +1,4 @@
+import { withBase } from "@/lib/basePath";
 /**
  * Voice service for RDC Saathi.
  * Speech recognition uses the browser API; speech output prefers server-generated
@@ -155,7 +156,7 @@ function startEnergyTracking(
 
 async function speakGeneratedAudio(options: TTSOptions): Promise<boolean> {
   activeRequest = new AbortController();
-  const response = await fetch("/api/voice/tts", {
+  const response = await fetch(withBase("/api/voice/tts"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text: conversationalSpeechText(options.text), language: options.language }),

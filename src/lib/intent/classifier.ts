@@ -61,7 +61,9 @@ const INTENT_RULES: IntentRule[] = [
   },
   {
     intent: "commercial_intent",
-    patterns: ["i need concrete", "require concrete", "want to buy", "quotation", "quote please", "pricing", "rate", "supply to my", "project requirement", "bulk order", "tender", "contractor need", "my project"],
+    patterns: ["i need concrete", "require concrete", "want to buy", "quotation", "quote please", "pricing", "rate", "supply to my", "project requirement", "bulk order", "tender", "contractor need", "my project",
+      "need ready mix", "need rmc", "want rmc", "order concrete", "book an order", "place an order", "deliver to",
+      "delivery to", "deliver in", "supply in", "for my house", "house slab", "roof slab", "cubic metre", "cubic meter"],
     weight: 9,
   },
   {

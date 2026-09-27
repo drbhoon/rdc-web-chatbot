@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin/auth";
 import { prisma } from "@/lib/db";
+import { rateLimited } from "@/lib/rateLimit";
 import { v4 as uuidv4 } from "uuid";
 import nodemailer from "nodemailer";
 
@@ -114,7 +115,19 @@ async function sendLeadEmail(lead: {
   });
 }
 
+const FIELD_LIMIT = 500;
+
 export async function POST(req: NextRequest) {
+  // Orders, quotes and complaints go to RDC Tara on WhatsApp (RDC,
+  // 2026-09-27), so the chat no longer collects contact details. The form can be
+  // switched back on with LEAD_CAPTURE_MODE=form; it was an open endpoint that
+  // e-mailed sales on every call, so it stays rate-limited and length-checked.
+  if (process.env.LEAD_CAPTURE_MODE !== "form") {
+    return NextResponse.json({ error: "Please message RDC Tara on WhatsApp for orders and quotes." }, { status: 410 });
+  }
+  if (rateLimited(req, "leads", 5)) {
+    return NextResponse.json({ error: "Please try again in one minute." }, { status: 429 });
+  }
   let body;
   try {
     body = await req.json();
@@ -135,6 +148,11 @@ export async function POST(req: NextRequest) {
     notes,
     detectedIntent,
   } = body;
+
+  if ([sessionId, name, company, mobile, email, city, projectType, estimatedQty, requirementTiming, notes, detectedIntent]
+      .some((value) => value != null && (typeof value !== "string" || value.length > FIELD_LIMIT))) {
+    return NextResponse.json({ error: "Invalid lead details" }, { status: 400 });
+  }
 
   if (!mobile && !email) {
     return NextResponse.json(

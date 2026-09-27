@@ -4,7 +4,9 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { MessageSquareText, X, Mic, MicOff, Send, Volume2, VolumeX, ChevronDown } from "lucide-react";
 import { getLanguageName, isRTL } from "@/lib/i18n/languageDetector";
 import { isSpeechRecognitionSupported, createSpeechRecognition, speakText, stopSpeaking } from "@/lib/voice/voiceService";
-import LeadCaptureForm from "./LeadCaptureForm";
+import TaraWhatsAppCard from "./TaraWhatsAppCard";
+import { FACTS } from "@/lib/facts";
+import { withBase } from "@/lib/basePath";
 import SaathiAvatar from "./SaathiAvatar";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -262,7 +264,7 @@ export default function ChatWidget() {
       setInputValue("");
 
       try {
-        const res = await fetch("/api/chat", {
+        const res = await fetch(withBase("/api/chat"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -504,14 +506,11 @@ export default function ChatWidget() {
 
                 {state.isLoading && <TypingIndicator />}
 
-                {/* Lead Capture Form */}
+                {/* Buying or complaining: hand over to RDC Tara on WhatsApp */}
                 {state.showLeadForm && (
                   <div className="animate-fade-in">
-                    <LeadCaptureForm
-                      sessionId={state.sessionId}
-                      intent={state.leadFormShownForIntent || ""}
-                      detectedLanguage={state.detectedLanguage}
-                      onSubmit={() => setState((prev) => ({ ...prev, showLeadForm: false }))}
+                    <TaraWhatsAppCard
+                      language={state.detectedLanguage}
                       onDismiss={() => setState((prev) => ({ ...prev, showLeadForm: false }))}
                     />
                   </div>
@@ -592,8 +591,11 @@ export default function ChatWidget() {
                   <Send size={16} />
                 </button>
               </form>
-              <p className="text-center text-gray-300 text-xs mt-2">
-                Powered by RDC Saathi AI
+              <p className="text-center text-gray-400 text-xs mt-2">
+                Order or complaint?{" "}
+                <a href={FACTS.tara.link} target="_blank" rel="noopener noreferrer" className="font-medium text-green-700 underline">
+                  Chat with {FACTS.tara.name} on WhatsApp
+                </a>
               </p>
             </div>
           </div>
