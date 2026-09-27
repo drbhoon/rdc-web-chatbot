@@ -97,7 +97,7 @@ function AdminLogin({ onLogin }: { onLogin: (token: string) => void }) {
           >
             <Shield size={24} />
           </div>
-          <h1 className="text-xl font-bold text-gray-800">RDC Saathi Admin</h1>
+          <h1 className="text-xl font-bold text-gray-800">TARA Online Admin</h1>
           <p className="text-sm text-gray-500 mt-1">Internal Management Panel</p>
         </div>
 
@@ -250,7 +250,7 @@ function AdminDashboard({ token, onLogout }: { token: string; onLogout: () => vo
               >
                 RDC
               </div>
-              <span className="font-semibold text-gray-800 text-sm">Saathi Admin</span>
+              <span className="font-semibold text-gray-800 text-sm">TARA Online Admin</span>
             </div>
             <div className="flex items-center gap-2">
               <button

@@ -48,7 +48,7 @@ const QUICK_PROMPTS = [
   "Contact sales",
 ];
 
-const INITIAL_GREETING = "Welcome to RDC Concrete! 🙏\n\nI'm **RDC Saathi**, your digital assistant. I can help you with information about our products, plant locations, ordering process, and more.\n\nHow can I help you today?";
+const INITIAL_GREETING = "Welcome to RDC Concrete! 🙏\n\nI'm **TARA Online**, your digital assistant. I can help you with information about our products, plant locations, ordering process, and more.\n\nHow can I help you today?";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utility: Render markdown-like bold text
@@ -430,11 +430,11 @@ export default function ChatWidget() {
                     boxShadow: "0 0 0 2px rgba(255,255,255,0.2)",
                   }}
                 >
-                  RS
+                  T
                 </div>
                 <div>
                   <div className="text-white font-semibold text-sm leading-tight">
-                    RDC Saathi
+                    TARA Online
                   </div>
                   <div className="flex items-center gap-1.5">
                     <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
@@ -612,7 +612,7 @@ export default function ChatWidget() {
             boxShadow: "0 4px 20px rgba(232, 93, 4, 0.4)",
             animation: "pulse-ring 2.5s infinite",
           }}
-          aria-label="Open chat with RDC Saathi"
+          aria-label="Open chat with TARA Online"
           id="chat-launcher"
         >
           <MessageSquareText size={22} />

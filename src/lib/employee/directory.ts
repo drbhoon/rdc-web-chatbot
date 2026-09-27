@@ -304,9 +304,9 @@ async function sendOtpEmail(email: string, code: string): Promise<void> {
   await transporter.sendMail({
     from: process.env.SMTP_FROM,
     to: email,
-    subject: "Your RDC Saathi verification code",
-    text: `Your RDC Saathi verification code is ${code}. This code is valid for 10 minutes.`,
-    html: `<p>Your RDC Saathi verification code is <strong>${code}</strong>.</p><p>This code is valid for 10 minutes.</p>`,
+    subject: "Your TARA Online verification code",
+    text: `Your TARA Online verification code is ${code}. This code is valid for 10 minutes.`,
+    html: `<p>Your TARA Online verification code is <strong>${code}</strong>.</p><p>This code is valid for 10 minutes.</p>`,
   });
 }
 

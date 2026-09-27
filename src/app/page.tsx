@@ -42,7 +42,6 @@ const SERVICES = [
   { name: "High-Performance Concrete", desc: "HPC and SCC for critical structural requirements" },
   { name: "Sustainable Mixes", desc: "Fly ash and GGBS blended eco-friendly concrete" },
   { name: "Site Captive Plants", desc: "Dedicated batching plants for mega infrastructure projects" },
-  { name: "Customer Connect App", desc: "Digital ordering, tracking, and invoice management" },
   { name: "RDCTrak Monitoring", desc: "Real-time transit mixer GPS tracking for clients" },
 ];
 
@@ -329,7 +328,7 @@ export default function HomePage() {
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-2xl font-bold text-gray-800 mb-2">Ready to Get Started?</h2>
           <p className="text-gray-500 text-sm mb-8">
-            Chat with RDC Saathi (bottom right corner) for instant answers,
+            Chat with TARA Online (bottom right corner) for instant answers,
             or reach us directly:
           </p>
           <div className="flex flex-wrap justify-center gap-6">
@@ -369,7 +368,7 @@ export default function HomePage() {
           </a>
           <span>·</span>
           <span style={{ color: "rgba(244,140,6,0.7)" }}>
-            Powered by RDC Saathi AI
+            Powered by TARA Online
           </span>
         </div>
       </footer>

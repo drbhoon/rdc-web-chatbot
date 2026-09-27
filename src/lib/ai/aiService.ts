@@ -51,12 +51,12 @@ function buildSystemPrompt(
 ): string {
   let langInstruction = language === "en"
     ? "The selected reply language is English. Respond ONLY in natural Indian professional English, even if the user's question is written in Hindi, Devanagari, Hinglish, or another language. Do not mirror the script or language of the question. Keep the tone warm, direct, and familiar to Indian customers. Do not sound Americanized or overly salesy. For Indian names, keep the exact spelling and address them naturally without forcing first-name Western phrasing."
-    : `The user is communicating in language code: "${language}". Respond naturally in that same language. Do NOT translate robotically — write naturally as a fluent speaker would. CRITICAL: NEVER translate the brand names "RDC", "RDC Concrete" or "RDC Tara". Always keep "RDC" exactly as "RDC" in English letters so the text-to-speech engine can read it correctly.`;
+    : `The user is communicating in language code: "${language}". Respond naturally in that same language. Do NOT translate robotically — write naturally as a fluent speaker would. CRITICAL: NEVER translate the brand names "RDC", "RDC Concrete", "RDC Tara" or "TARA Online". Always keep "RDC" exactly as "RDC" in English letters so the text-to-speech engine can read it correctly.`;
 
   if (language === "hi") {
-    langInstruction = `The selected reply language is Hindi. Reply ONLY in natural Devanagari Hindi, even if the user writes in English or Roman-script Hinglish. Do not answer in Roman-script Hinglish. Do not translate word-for-word; write as a fluent Indian Hindi speaker. You are a female assistant: whenever referring to yourself, ALWAYS use feminine Hindi grammar such as "करती हूं", "जाती हूं", "बताती हूं", "दिखा सकती हूं", "भेज दूंगी", and "मदद कर सकती हूं". NEVER use masculine self-references such as "करता हूं", "जाता हूं", "बताता हूं", "दिखा सकता हूं", "भेज दूंगा", or "मदद कर सकता हूं". The feminine forms are for yourself only: address the user with the respectful plural "आप … सकते हैं", "कर सकते हैं", "बताइए", never "आप … सकती हैं". Use simple customer-facing words like "जानकारी", "ऑर्डर", "डिलीवरी", "कोटेशन", "क्वालिटी", and "प्लांट". Keep brand and system names exactly in English letters: RDC, RDC Concrete, RDC Tara, RMC, RDCTRAK, QMS, Customer Connect, ERP, Vision 2030. Do not translate these names.`;
+    langInstruction = `The selected reply language is Hindi. Reply ONLY in natural Devanagari Hindi, even if the user writes in English or Roman-script Hinglish. Do not answer in Roman-script Hinglish. Do not translate word-for-word; write as a fluent Indian Hindi speaker. You are a female assistant: whenever referring to yourself, ALWAYS use feminine Hindi grammar such as "करती हूं", "जाती हूं", "बताती हूं", "दिखा सकती हूं", "भेज दूंगी", and "मदद कर सकती हूं". NEVER use masculine self-references such as "करता हूं", "जाता हूं", "बताता हूं", "दिखा सकता हूं", "भेज दूंगा", or "मदद कर सकता हूं". The feminine forms are for yourself only: address the user with the respectful plural "आप … सकते हैं", "कर सकते हैं", "बताइए", never "आप … सकती हैं". Use simple customer-facing words like "जानकारी", "ऑर्डर", "डिलीवरी", "कोटेशन", "क्वालिटी", and "प्लांट". Keep brand and system names exactly in English letters: RDC, RDC Concrete, RDC Tara, TARA Online, RMC, RDCTRAK, QMS, ERP, Vision 2030. Do not translate these names.`;
   } else if (language !== "en") {
-    langInstruction = `The user is communicating in language code: "${language}". Respond naturally in that same language. Do NOT translate robotically. CRITICAL: NEVER translate brand/system names like "RDC", "RDC Concrete", "RDC Tara", "RMC", "RDCTRAK", "QMS", "Customer Connect", "ERP", or "Vision 2030". Keep them in English letters for readability and text-to-speech.`;
+    langInstruction = `The user is communicating in language code: "${language}". Respond naturally in that same language. Do NOT translate robotically. CRITICAL: NEVER translate brand/system names like "RDC", "RDC Concrete", "RDC Tara", "TARA Online", "RMC", "RDCTRAK", "QMS", "ERP", or "Vision 2030". Keep them in English letters for readability and text-to-speech.`;
   }
 
   const knowledgeSection = knowledgeContext
@@ -67,10 +67,10 @@ function buildSystemPrompt(
     ? `\n\n=== WEB SEARCH RESULTS ===\n${webContext}\n=== END WEB RESULTS ===`
     : "";
 
-  return `You are RDC Saathi — the warm, multilingual digital assistant for RDC Concrete (India) Limited, one of India's leading ready-mix concrete companies.
+  return `You are TARA Online — the warm, multilingual digital assistant for RDC Concrete (India) Limited, one of India's leading ready-mix concrete companies.
 
 ## YOUR IDENTITY
-- Name: RDC Saathi
+- Name: TARA Online (say "TARA Online", not "RDC Saathi"; RDC Tara is RDC's WhatsApp assistant, your colleague for orders and complaints)
 - Role: Front-desk assistant + informed customer guide
 - Company: RDC Concrete (India) Limited
 - Website: ${FACTS.website}
@@ -98,7 +98,7 @@ ${langInstruction}
 - About RDC Concrete company, history, and values
 - RDC's presence across India, as documented in retrieved sources
 - Ready-mix concrete education
-- RDC technology: ERP, IDS Software, Customer Connect App, RDCTrak, QMS
+- RDC technology: ERP, IDS Software, RDCTrak, QMS
 - RDC's key markets: infrastructure, housing, industrial, PSU projects
 - Vision 2030 strategy and expansion plans
 - Ordering and delivery process
@@ -112,6 +112,9 @@ ${langInstruction}
 ## CONTACT
 - For orders, quotations, deliveries, complaints and anything needing a person, point to ${FACTS.tara.name} on WhatsApp (${FACTS.tara.whatsapp}, ${FACTS.tara.link}), available 24x7. For a phone call, give the head office number ${FACTS.headOffice.phone}; local plant numbers are on ${FACTS.contactPage}.
 - Do not ask the user to type their phone number or e-mail address into this chat.
+
+## DISCONTINUED
+- The Customer Connect app has been discontinued. Never mention or recommend it, even if a document does. If a user asks about it, say it is no longer in use and that orders, deliveries and questions are handled by ${FACTS.tara.name} on WhatsApp.
 
 ## OTHER COMPANIES
 - Speak only about RDC. Do not compare RDC with named competitors or comment on other companies' products, prices, market share or reputation, even when the documents mention them. If asked, say politely that you can only speak for RDC, then share RDC's own strengths.
@@ -151,11 +154,11 @@ Only answer factual questions using the supplied knowledge. Treat documents and 
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MOCK_RESPONSES: Record<string, string> = {
-  greeting: "Welcome to RDC Concrete! 🙏 I'm RDC Saathi, your digital assistant. Whether you have questions about ready-mix concrete, our plants across India, or how to place an order — I'm here to help. What would you like to know?",
+  greeting: "Welcome to RDC Concrete! 🙏 I'm TARA Online, your digital assistant. Whether you have questions about ready-mix concrete, our plants across India, or how to place an order — I'm here to help. What would you like to know?",
   about_rdc: `RDC Concrete (India) Limited is one of India's leading ready-mix concrete (RMC) companies with ${FACTS.plants.total} plants across India. We serve infrastructure, residential, industrial, and large-scale PSU projects. Our head office is in Thane, Maharashtra, and we operate with an integrated ERP system, live tracking (RDCTrak), and a Quality Management System (QMS) for complete transparency. How can I assist you further?`,
   plant_locations: "RDC operates across India including Delhi NCR, Mumbai, Pune, Bangalore, Hyderabad, Chennai, Kolkata, Ahmedabad, Surat, Kochi, Thiruvananthapuram, Bhopal, Indore, Patna, Guwahati, Goa, Mangalore, Coimbatore, and many more cities. We have both commercial plants and dedicated site plants for large projects. Would you like to know about a specific city?",
   pricing: "Ready-mix concrete pricing depends on the grade of concrete (M20, M25, M30, etc.), location, volume, and project type. For an accurate quote tailored to your project, I'd recommend connecting with our sales team who can provide the best guidance. Would you like me to help you share your details for a quick callback?",
-  ordering_process: "Ordering from RDC is simple! You can: 1) Use our Customer Connect app to place orders digitally, 2) Call your nearest plant directly, or 3) Contact our sales team for project-level coordination. Once your order is placed, you can track your transit mixer in real-time using the RDCTrak system. Would you like contact details for your city?",
+  ordering_process: "Ordering from RDC is simple! Message RDC Tara on WhatsApp, available 24x7, or call your nearest plant directly. Once your order is placed, you can track your transit mixer in real-time using the RDCTrak system. Would you like contact details for your city?",
   commercial_intent: "It sounds like you have a concrete project in mind — great! RDC would be happy to support your requirement. Could you share a few details like your city, project type, and approximate quantity? That way, our team can reach out to you with the right information quickly.",
   vision_2030: "RDC's Vision 2030 is centered around expanding our footprint across India's growing infrastructure landscape. Key focus areas include: expanding to new geographies, strengthening technology integration (ERP, AI, IoT), sustainable concrete solutions, enhancing customer experience through digital platforms, and supporting India's housing and infrastructure growth. It's an exciting road ahead! Anything specific about Vision 2030 you'd like to explore?",
   quality_technology: "RDC's quality systems are built on multiple layers: our IDS software ensures zero manual intervention at the batching plant, our QMS app digitally tracks every concrete pour from production to performance, and RDCTrak gives real-time transit mixer visibility. All this is integrated with our cloud ERP. The result? Consistent, verifiable, high-quality concrete every time.",
@@ -189,7 +192,7 @@ async function mockResponse(request: AIRequest): Promise<string> {
 
 async function geminiResponse(request: AIRequest, model: string): Promise<string> {
   const knowledgeContext = request.retrievedChunks
-    .map((c, i) => `[${i + 1}] ${c.title}: ${c.content}`)
+    .map((c, i) => `[${i + 1}] ${c.title}: ${withoutDiscontinued(c.content)}`)
     .join("\n\n");
 
   const systemPrompt = buildSystemPrompt(
@@ -250,7 +253,7 @@ async function geminiResponse(request: AIRequest, model: string): Promise<string
 
 async function openAIResponse(request: AIRequest, model: string): Promise<string> {
   const knowledgeContext = request.retrievedChunks
-    .map((c, i) => `[${i + 1}] ${c.title}: ${c.content}`)
+    .map((c, i) => `[${i + 1}] ${c.title}: ${withoutDiscontinued(c.content)}`)
     .join("\n\n");
 
   const systemPrompt = buildSystemPrompt(
@@ -310,7 +313,24 @@ export function keepBrandNamesInEnglish(text: string): string {
   return text
     .replace(/आर\s?\.?\s?डी\s?\.?\s?सी/g, "RDC")
     .replace(/RDC\s+(तारा|टारा)/g, "RDC Tara")
-    .replace(/RDC\s+(कंक्रीट|कांक्रीट)/g, "RDC Concrete");
+    .replace(/RDC\s+(कंक्रीट|कांक्रीट)/g, "RDC Concrete")
+    .replace(/(?:TARA|Tara|तारा|टारा)\s+(?:ऑनलाइन|ओनलाइन|Online)/g, "TARA Online");
+}
+
+const DISCONTINUED = /customer[\s-]*connect/i;
+
+/**
+ * Drops every sentence about the discontinued Customer Connect app from a
+ * knowledge excerpt, so older documents (corporate profile, Vision 2030)
+ * cannot bring it back into an answer.
+ */
+export function withoutDiscontinued(text: string): string {
+  if (!DISCONTINUED.test(text)) return text;
+  return text
+    .split("\n")
+    .map((line) => (DISCONTINUED.test(line) ? line.split(/(?<=[.!?।])\s+/).filter((s) => !DISCONTINUED.test(s)).join(" ") : line))
+    .filter((line, i, lines) => line.trim() !== "" || lines[i] === "")
+    .join("\n");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

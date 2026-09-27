@@ -4,7 +4,7 @@ import { readFileSync } from "fs";
 import { FACTS, PLANT_LOCATIONS, factsOfRecord } from "../src/lib/facts";
 import { rateLimitedKey } from "../src/lib/rateLimit";
 import { extractEmployeeName } from "../src/lib/employee/directory";
-import { keepBrandNamesInEnglish } from "../src/lib/ai/aiService";
+import { keepBrandNamesInEnglish, withoutDiscontinued } from "../src/lib/ai/aiService";
 
 test("facts of record: the official website, numbers and plant count RDC gave", () => {
   const block = factsOfRecord();
@@ -48,6 +48,16 @@ test("brand names stay in English letters in Hindi replies", () => {
   );
   // The ordinary word for star is left alone.
   assert.equal(keepBrandNamesInEnglish("आसमान में एक तारा है"), "आसमान में एक तारा है");
+  assert.equal(keepBrandNamesInEnglish("मैं तारा ऑनलाइन हूं"), "मैं TARA Online हूं");
+});
+
+test("the discontinued Customer Connect app never reaches the model", () => {
+  const excerpt = "Digital tools:\nRDCTrak tracks every mixer. The Customer Connect App handles orders. QMS covers quality.\n- RDC Customer-Connect: online order management\nERP runs finance.";
+  const cleaned = withoutDiscontinued(excerpt);
+  assert.doesNotMatch(cleaned, /customer[\s-]*connect/i);
+  assert.match(cleaned, /RDCTrak tracks every mixer\. QMS covers quality\./);
+  assert.match(cleaned, /ERP runs finance\./);
+  assert.equal(withoutDiscontinued("Nothing to remove."), "Nothing to remove.");
 });
 
 test("per-chat rate limit: the 21st message in a minute is refused, another chat is not", () => {

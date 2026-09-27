@@ -54,7 +54,7 @@ export default function SaathiAvatar({
   const [liveReady, setLiveReady] = useState(false);
 
   return (
-    <section className={`saathi-avatar-shell mode-${mode}`} aria-label={`RDC Saathi: ${label}`}>
+    <section className={`saathi-avatar-shell mode-${mode}`} aria-label={`TARA Online: ${label}`}>
       <div className="saathi-avatar-stage" aria-hidden="true">
         <div className="saathi-avatar-halo" />
         <div className={`saathi-avatar-photo ${liveReady ? "is-live" : ""}`}>
@@ -97,7 +97,7 @@ export default function SaathiAvatar({
       </div>
 
       <div className="saathi-avatar-meta">
-        <div className="saathi-avatar-name">RDC Saathi</div>
+        <div className="saathi-avatar-name">TARA Online</div>
         <div className="saathi-avatar-role">AI-generated female voice</div>
         <div className="saathi-language-toggle" role="group" aria-label="Reply language">
           <button

@@ -93,9 +93,9 @@ async function sendLeadEmail(lead: {
     from: process.env.SMTP_FROM,
     to: SALES_LEAD_EMAIL,
     replyTo: lead.email || undefined,
-    subject: `New RDC Saathi Lead: ${lead.name || lead.mobile || lead.email || lead.id}`,
+    subject: `New TARA Online Lead: ${lead.name || lead.mobile || lead.email || lead.id}`,
     text: [
-      "A new customer lead was submitted from RDC Saathi.",
+      "A new customer lead was submitted from TARA Online.",
       "",
       textRows,
       "",
@@ -104,8 +104,8 @@ async function sendLeadEmail(lead: {
     ].join("\n"),
     html: `
       <div style="font-family:Arial,sans-serif;color:#1e293b;line-height:1.5;">
-        <h2 style="margin:0 0 12px;color:#1b2a4a;">New RDC Saathi Lead</h2>
-        <p>A customer submitted the sales contact form in RDC Saathi.</p>
+        <h2 style="margin:0 0 12px;color:#1b2a4a;">New TARA Online Lead</h2>
+        <p>A customer submitted the sales contact form in TARA Online.</p>
         <table style="border-collapse:collapse;width:100%;max-width:720px;">${htmlRows}</table>
         <h3 style="margin:20px 0 8px;color:#1b2a4a;">Recent chat transcript</h3>
         <pre style="white-space:pre-wrap;background:#f8fafc;border:1px solid #e2e8f0;padding:12px;border-radius:8px;">${escapeHtml(

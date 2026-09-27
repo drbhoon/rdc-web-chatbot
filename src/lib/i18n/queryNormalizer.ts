@@ -11,7 +11,6 @@ const HINGLISH_TERMS: Array<[RegExp, string]> = [
   [/\bdigital systems?\b|\bdigital initiatives?\b/gi, "digital initiatives technology systems"],
   [/\bvision\s*2030\b/gi, "Vision 2030 strategy growth plan"],
   [/\brdctrak\b/gi, "RDCTRAK outbound logistics transit mixer tracking"],
-  [/\bcustomer connect\b/gi, "Customer Connect online order management"],
   [/\bqms\b/gi, "QMS quality management QA QC"],
   [/\border\b|\bbooking\b|\bkharid\b|\bkhareed\b/gi, "ordering process concrete order"],
   [/\bplant\b|\bplants\b|\blocation\b|\bshehar\b|\bcity\b/gi, "plant locations city presence"],
@@ -69,7 +68,7 @@ async function openAINormalize(message: string, language: string): Promise<strin
           {
             role: "system",
             content:
-              "Convert the visitor's Indian-language or Hinglish question into one concise English search query for retrieving RDC Concrete company knowledge. Keep brand/product names exactly: RDC, RMC, RDCTRAK, QMS, Customer Connect. Return only the query.",
+              "Convert the visitor's Indian-language or Hinglish question into one concise English search query for retrieving RDC Concrete company knowledge. Keep brand/product names exactly: RDC, RDC Tara, RMC, RDCTRAK, QMS. Return only the query.",
           },
           {
             role: "user",
