@@ -6,7 +6,9 @@ Writes knowledge/public/commercial-plants.jsonl: one chunk per commercial plant
 (its locality, the city or state it belongs to, and its full address), plus one
 overview chunk that states the plant count of record and lists every
 commercial plant by location. Load it into the database with
-`npx tsx scripts/replacePlantKnowledge.ts`.
+`npx tsx scripts/replacePlantKnowledge.ts`. Also writes
+knowledge/plant-locations.json, the place list the bot is given in every
+answer (it ships with the next deploy; no database load needed).
 
 Only COMMERCIAL plants go in. RDC does not publish details of its dedicated
 (project) plants, so they appear only as a count, taken from
@@ -37,6 +39,7 @@ import openpyxl
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "knowledge" / "public" / "commercial-plants.jsonl"
+LOCATIONS_OUT = ROOT / "knowledge" / "plant-locations.json"
 FACTS = json.loads((ROOT / "knowledge" / "facts.json").read_text(encoding="utf-8"))
 SOURCE = "RDC Commercial Plants"
 TAGS = ["plants", "public_knowledge", "rdc", "commercial_plants", "plant_addresses"]
@@ -120,6 +123,14 @@ def main(path: str) -> None:
         for chunk in chunks:
             f.write(json.dumps(chunk, ensure_ascii=False) + "\n")
     print(f"Wrote {len(chunks)} chunks ({len(plants)} commercial plants + 1 overview) to {OUT}")
+
+    # The same place list goes into every answer's facts of record
+    # (src/lib/facts.ts), so "where do you operate?" is answered from it even
+    # when retrieval misses the overview, instead of from a guess.
+    places = [{"name": place, "plants": len(names)} for place, names in sorted(by_location.items())]
+    LOCATIONS_OUT.write_text(json.dumps({"asOf": FACTS["asOf"], "locations": places}, ensure_ascii=False, indent=2) + "\n",
+                             encoding="utf-8", newline="\n")
+    print(f"Wrote {len(places)} commercial plant locations to {LOCATIONS_OUT}")
 
 
 if __name__ == "__main__":

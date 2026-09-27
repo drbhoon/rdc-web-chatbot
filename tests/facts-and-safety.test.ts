@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "fs";
-import { FACTS, factsOfRecord } from "../src/lib/facts";
+import { FACTS, PLANT_LOCATIONS, factsOfRecord } from "../src/lib/facts";
 import { rateLimitedKey } from "../src/lib/rateLimit";
 import { extractEmployeeName } from "../src/lib/employee/directory";
 
@@ -30,6 +30,12 @@ test("plant knowledge: every commercial plant, the count of record, nothing on d
     assert.doesNotMatch(plant.text, /captive|dedicated/i);
   }
   assert.equal(new Set(chunks.map((c) => c.id)).size, chunks.length, "chunk ids are unique");
+  // The place list in every answer's facts matches the plant knowledge.
+  assert.equal(PLANT_LOCATIONS.reduce((n, l) => n + l.plants, 0), FACTS.plants.commercial);
+  const counted = new Map<string, number>();
+  for (const plant of plants) counted.set(plant.metadata.location, (counted.get(plant.metadata.location) ?? 0) + 1);
+  assert.deepEqual(Object.fromEntries(counted), Object.fromEntries(PLANT_LOCATIONS.map((l) => [l.name, l.plants])));
+  assert.match(factsOfRecord(), /Commercial plant locations[^\n]*Bengaluru \(12\)/);
   // "Region" is an internal RDC business unit, never a way to describe geography.
   for (const chunk of chunks) assert.doesNotMatch(JSON.stringify(chunk), /region/i);
 });

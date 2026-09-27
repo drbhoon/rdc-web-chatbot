@@ -1,0 +1,105 @@
+{
+  "asOf": "2026-09-27",
+  "locations": [
+    {
+      "name": "Andhra Pradesh",
+      "plants": 2
+    },
+    {
+      "name": "Assam",
+      "plants": 2
+    },
+    {
+      "name": "Bengaluru",
+      "plants": 12
+    },
+    {
+      "name": "Bihar",
+      "plants": 1
+    },
+    {
+      "name": "Chennai",
+      "plants": 6
+    },
+    {
+      "name": "Chhattisgarh",
+      "plants": 2
+    },
+    {
+      "name": "Delhi NCR",
+      "plants": 11
+    },
+    {
+      "name": "Goa",
+      "plants": 2
+    },
+    {
+      "name": "Gujarat",
+      "plants": 8
+    },
+    {
+      "name": "Hyderabad",
+      "plants": 9
+    },
+    {
+      "name": "Jammu & Kashmir",
+      "plants": 2
+    },
+    {
+      "name": "Jharkhand",
+      "plants": 2
+    },
+    {
+      "name": "Karnataka",
+      "plants": 1
+    },
+    {
+      "name": "Kerala",
+      "plants": 8
+    },
+    {
+      "name": "Kolkata",
+      "plants": 5
+    },
+    {
+      "name": "Madhya Pradesh",
+      "plants": 5
+    },
+    {
+      "name": "Maharashtra",
+      "plants": 3
+    },
+    {
+      "name": "Mumbai",
+      "plants": 10
+    },
+    {
+      "name": "Odisha",
+      "plants": 2
+    },
+    {
+      "name": "Pune",
+      "plants": 5
+    },
+    {
+      "name": "Punjab",
+      "plants": 5
+    },
+    {
+      "name": "Rajasthan",
+      "plants": 1
+    },
+    {
+      "name": "Tamil Nadu",
+      "plants": 3
+    },
+    {
+      "name": "Uttar Pradesh",
+      "plants": 4
+    },
+    {
+      "name": "Uttarakhand",
+      "plants": 2
+    }
+  ]
+}

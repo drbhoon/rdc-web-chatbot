@@ -63,11 +63,11 @@ async function main() {
     await prisma.$transaction(async (tx) => {
       for (let i = 0; i < batch.length; i++) {
         const c = batch[i];
+        const metadata = JSON.stringify({ ...c.metadata, embeddingModel: EMBEDDING_MODEL });
         await tx.knowledgeChunk.upsert({
           where: { id: c.id },
-          create: { id: c.id, documentId: docId, content: c.text, chunkIndex: offset + i,
-                    metadata: JSON.stringify({ ...c.metadata, embeddingModel: EMBEDDING_MODEL }) },
-          update: { content: c.text, chunkIndex: offset + i },
+          create: { id: c.id, documentId: docId, content: c.text, chunkIndex: offset + i, metadata },
+          update: { content: c.text, chunkIndex: offset + i, metadata },
         });
         await tx.$executeRaw`UPDATE knowledge_chunks SET vector = ${vectorLiteral(vectors[i])}::vector WHERE id = ${c.id}`;
       }

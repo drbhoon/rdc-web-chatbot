@@ -10,8 +10,12 @@
  * when it is rebuilt (scripts/buildPlantKnowledge.py).
  */
 import facts from "../../knowledge/facts.json";
+import plantLocations from "../../knowledge/plant-locations.json";
 
 export const FACTS = facts;
+
+/** Where the commercial plants are, built with the plant knowledge. */
+export const PLANT_LOCATIONS = plantLocations.locations;
 
 export const TARA_WHATSAPP_LINK = facts.tara.link;
 
@@ -25,5 +29,6 @@ export function factsOfRecord(): string {
     `- Local plant phone numbers are listed on ${facts.contactPage}.`,
     `- Presence: RDC serves customers in ${facts.footprint.states} states, ${facts.footprint.unionTerritories} union territories and ${facts.footprint.cities} cities of India.`,
     `- Plants: RDC operates ${facts.plants.total} ready-mix concrete plants as on ${facts.asOf} — ${facts.plants.commercial} commercial plants and ${dedicated} dedicated plants built for specific customer projects.`,
+    `- Commercial plant locations (plants in each): ${PLANT_LOCATIONS.map((l) => `${l.name} (${l.plants})`).join(", ")}.`,
   ].join("\n");
 }
