@@ -1,0 +1,205 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────
+// Chat Session & Messages
+// ─────────────────────────────────────────
+
+model ChatSession {
+  id            String        @id @default(uuid())
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  language      String        @default("en")
+  sourcePage    String?
+  userAgent     String?
+  ipAddress     String?
+  leadCaptured  Boolean       @default(false)
+  messages      ChatMessage[]
+  leads         Lead[]
+  events        AnalyticsEvent[]
+  employeeOtps  EmployeeOtp[]
+
+  @@map("chat_sessions")
+}
+
+
+
+model EmployeeOtp {
+  id           String      @id @default(uuid())
+  sessionId    String
+  session      ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  employeeName String
+  email        String?
+  codeHash     String?
+  attempts     Int         @default(0)
+  verifiedAt   DateTime?
+  expiresAt    DateTime
+  createdAt    DateTime    @default(now())
+
+  @@index([sessionId])
+  @@index([email])
+  @@map("employee_otps")
+}
+
+model ChatMessage {
+  id              String      @id @default(uuid())
+  sessionId       String
+  session         ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role            String      // "user" | "assistant" | "system"
+  content         String
+  language        String      @default("en")
+  intent          String?
+  confidence      Float?
+  retrievedChunks String?     // JSON array of chunk IDs
+  usedWebSearch   Boolean     @default(false)
+  usedMockMode    Boolean     @default(false)
+  leadCtaShown    Boolean     @default(false)
+  processingMs    Int?
+  createdAt       DateTime    @default(now())
+
+  @@index([sessionId])
+  @@map("chat_messages")
+}
+
+// ─────────────────────────────────────────
+// Lead Capture
+// ─────────────────────────────────────────
+
+model Lead {
+  id               String      @id @default(uuid())
+  sessionId        String?
+  session          ChatSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  name             String?
+  company          String?
+  mobile           String?
+  email            String?
+  city             String?
+  projectType      String?
+  estimatedQty     String?
+  requirementTiming String?
+  notes            String?
+  status           String      @default("new") // "new" | "contacted" | "converted" | "closed"
+  transcriptSummary String?
+  sourcePage       String?
+  detectedIntent   String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  @@map("leads")
+}
+
+// ─────────────────────────────────────────
+// Knowledge Base
+// ─────────────────────────────────────────
+
+model KnowledgeDocument {
+  id          String           @id @default(uuid())
+  title       String
+  category    String
+  sourceType  String           // "company" | "product" | "educational" | "faq" | "vision"
+  sourceName  String
+  language    String           @default("en")
+  audience    String           @default("general")
+  geography   String           @default("india")
+  visibility  String           @default("public")
+  tags        String           // JSON array of tags
+  lastUpdated DateTime         @default(now())
+  isActive    Boolean          @default(true)
+  chunks      KnowledgeChunk[]
+  createdAt   DateTime         @default(now())
+
+  @@map("knowledge_documents")
+}
+
+model KnowledgeChunk {
+  id          String            @id @default(uuid())
+  documentId  String
+  document    KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  content     String
+  chunkIndex  Int
+  vector      Unsupported("vector(1536)")?
+  embedding   String?           // JSON array of floats (simple vector)
+  metadata    String?           // JSON metadata
+  createdAt   DateTime          @default(now())
+
+  @@index([documentId])
+  @@map("knowledge_chunks")
+}
+
+// ─────────────────────────────────────────
+// App Configuration
+// ─────────────────────────────────────────
+
+model AppConfig {
+  id         String   @id @default(uuid())
+  key        String   @unique
+  value      String
+  type       String   @default("string") // "string" | "boolean" | "number" | "json"
+  label      String?
+  updatedAt  DateTime @updatedAt
+  updatedBy  String?
+
+  @@map("app_configs")
+}
+
+// ─────────────────────────────────────────
+// Admin Users
+// ─────────────────────────────────────────
+
+model AdminUser {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         String   @default("viewer") // "admin" | "viewer"
+  isActive     Boolean  @default(true)
+  lastLogin    DateTime?
+  createdAt    DateTime @default(now())
+
+  @@map("admin_users")
+}
+
+// ─────────────────────────────────────────
+// Analytics Events
+// ─────────────────────────────────────────
+
+model AnalyticsEvent {
+  id         String      @id @default(uuid())
+  sessionId  String?
+  session    ChatSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  eventType  String      // "session_start" | "message_sent" | "lead_captured" | "fallback_used" | etc
+  language   String?
+  intent     String?
+  metadata   String?     // JSON
+  createdAt  DateTime    @default(now())
+
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("analytics_events")
+}
+
+model UnansweredQuestion {
+  id String @id @default(uuid())
+  fingerprint String @unique
+  question String
+  language String @default("en")
+  reason String
+  occurrences Int @default(1)
+  status String @default("pending")
+  answer String?
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  lastAskedAt DateTime @default(now())
+  answeredAt DateTime?
+  @@index([status])
+  @@map("unanswered_questions")
+}

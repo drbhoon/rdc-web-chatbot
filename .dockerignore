@@ -1,0 +1,15 @@
+node_modules
+.next
+.git
+.env*
+.operational
+*.db
+prisma/*.db
+knowledge/generated
+knowledge/Employees.csv
+knowledge/employees.csv
+knowledge/employees.json
+knowledge/rdc-knowledge.json
+private
+tests
+scripts/upgrade-workspace.cjs
