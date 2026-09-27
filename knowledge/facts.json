@@ -1,0 +1,21 @@
+{
+  "asOf": "2026-09-27",
+  "company": "RDC Concrete (India) Limited",
+  "website": "https://www.rdc.in",
+  "contactPage": "https://www.rdc.in/contactus",
+  "headOffice": {
+    "address": "7th Floor, Thane One Corporate IT Park, Ghodbunder Road, Kapurbawdi, Thane (West) 400 610, Maharashtra, India",
+    "phone": "+91 22 6789 6789"
+  },
+  "tara": {
+    "name": "RDC Tara",
+    "whatsapp": "+91 86579 40541",
+    "link": "https://wa.me/918657940541",
+    "handles": "booking a concrete order, raising a complaint, or asking a question, 24x7"
+  },
+  "plants": {
+    "total": 141,
+    "commercial": 113,
+    "commercialListSource": "Plant Names and addresses Sep 26.xlsx"
+  }
+}

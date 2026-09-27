@@ -1,4 +1,5 @@
 import ChatWidget from "@/components/chat/ChatWidget";
+import { FACTS } from "@/lib/facts";
 import { Building2, Shield, Truck, Award, MapPin, Phone, Mail, ChevronRight } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -340,10 +341,10 @@ export default function HomePage() {
               <Phone size={16} /> +91 22 6789 6789
             </a>
             <a
-              href="mailto:info@rdcconcrete.in"
+              href={FACTS.contactPage}
               className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-medium text-gray-700 border border-gray-300 bg-white hover:border-orange-300 hover:text-orange-600 transition-all"
             >
-              <Mail size={16} /> info@rdcconcrete.in
+              <Mail size={16} /> {FACTS.contactPage.replace("https://", "")}
             </a>
           </div>
         </div>

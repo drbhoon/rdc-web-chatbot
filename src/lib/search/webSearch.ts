@@ -94,7 +94,7 @@ export function shouldUseWebSearch(
 }
 
 function buildCuratedQuery(query: string): string {
-  const domains = (process.env.CURATED_WEB_DOMAINS || "rdcconcrete.in,www.rdcconcrete.in")
+  const domains = (process.env.CURATED_WEB_DOMAINS || "rdc.in,www.rdc.in")
     .split(",")
     .map((domain) => domain.trim())
     .filter(Boolean);
