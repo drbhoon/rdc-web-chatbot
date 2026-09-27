@@ -27,6 +27,20 @@ const OTP_PATTERN = /^\s*(\d{6})\s*[.。।,!?]?\s*$/;
 
 const MAX_EMPLOYEE_LOOKUPS_PER_CODE = 10;
 
+// Verification e-mails go to any @rdc.in address a visitor types, so without a
+// cap one visitor could fill a colleague's inbox with RDC-branded codes.
+const MAX_CODES_PER_ADDRESS_PER_DAY = 5;
+const MAX_CODES_PER_CHAT_PER_HOUR = 3;
+
+// Words that make a phrase a question about a role or a thing, not a person's
+// name: "who is your managing director" must not start an employee lookup.
+const NOT_NAME_WORDS = new Set([
+  "the", "your", "our", "a", "an", "of", "for", "in", "at", "my", "this", "that",
+  "md", "ceo", "cfo", "coo", "chairman", "chairperson", "director", "directors", "founder", "founders",
+  "head", "president", "owner", "promoter", "promoters", "manager", "management", "team", "leader", "leadership",
+  "contact", "person", "plant", "office", "branch", "number", "phone", "price", "rate", "order", "delivery",
+]);
+
 export interface EmployeeDirectoryResult {
   handled: boolean;
   message?: string;
@@ -219,7 +233,9 @@ function isLikelyEmployeeName(name: string): boolean {
   ];
   if (blockedTerms.some((term) => normalized === term || normalized.includes(term))) return false;
 
-  return normalized.split(" ").filter(Boolean).length >= 2;
+  const tokens = normalized.split(" ").filter(Boolean);
+  if (tokens.some((token) => NOT_NAME_WORDS.has(token))) return false;
+  return tokens.length >= 2;
 }
 
 function isPossibleSingleEmployeeName(name: string): boolean {
@@ -227,10 +243,12 @@ function isPossibleSingleEmployeeName(name: string): boolean {
   if (!normalized || normalized.includes(" ")) return false;
   if (normalized.length < 4) return false;
   if (isCompanyTopic(name) || isEmployeeNegation(name)) return false;
+  if (NOT_NAME_WORDS.has(normalized)) return false;
   return true;
 }
 
-function extractEmployeeName(message: string): string | null {
+/** Exported for tests. */
+export function extractEmployeeName(message: string): string | null {
   if (isEmployeeNegation(message) || isCompanyTopic(message)) return null;
 
   for (const pattern of EMPLOYEE_LOOKUP_PATTERNS) {
@@ -457,18 +475,12 @@ export async function handleEmployeeDirectoryMessage(
   language = "en"
 ): Promise<EmployeeDirectoryResult> {
   const otpMatch = message.match(OTP_PATTERN);
-  if (otpMatch) {
-    const pending = await latestPendingOtp(sessionId);
-    if (!pending || !pending.codeHash) {
-      return {
-        handled: true,
-        message:
-          language === "hi"
-            ? "मुझे कोई active verification request नहीं दिख रही है. कृपया फिर से पूछें, जैसे: “Tell me about <employee name>”."
-            : "I do not see an active verification request. Please ask again, for example: “Tell me about <employee name>”.",
-        eventType: "employee_otp_missing",
-      };
-    }
+  // Six digits is also an Indian PIN code, and "which area?" is the bot's own
+  // question to a customer. Only treat it as a verification code when this
+  // chat has actually been sent one; otherwise it is an ordinary message.
+  const awaitingCode = otpMatch ? await latestPendingOtp(sessionId) : null;
+  if (otpMatch && awaitingCode?.codeHash) {
+    const pending = awaitingCode;
 
     if (pending.attempts >= 5) {
       return {
@@ -550,6 +562,23 @@ export async function handleEmployeeDirectoryMessage(
       };
     }
 
+    const since = (ms: number) => new Date(Date.now() - ms);
+    const [sentToAddress, sentInChat] = await Promise.all([
+      prisma.employeeOtp.count({ where: { email, codeHash: { not: null }, createdAt: { gte: since(24 * 3600 * 1000) } } }),
+      prisma.employeeOtp.count({ where: { sessionId, codeHash: { not: null }, createdAt: { gte: since(3600 * 1000) } } }),
+    ]);
+    if (sentToAddress >= MAX_CODES_PER_ADDRESS_PER_DAY || sentInChat >= MAX_CODES_PER_CHAT_PER_HOUR) {
+      return {
+        handled: true,
+        message:
+          language === "hi"
+            ? "इस समय और verification codes नहीं भेजे जा सकते. कृपया बाद में फिर प्रयास करें."
+            : "No more verification codes can be sent just now. Please try again later.",
+        eventType: "employee_otp_limited",
+        metadata: { employeeName: pending.employeeName, requesterEmail: email },
+      };
+    }
+
     const code = createOtp();
     try {
       await sendOtpEmail(email, code);
@@ -586,17 +615,12 @@ export async function handleEmployeeDirectoryMessage(
     };
   }
 
-  let employeeName = extractEmployeeName(message);
-  if (!employeeName) {
-    const directName = cleanEmployeeName(message);
-    if (
-      !isCompanyTopic(message) &&
-      (isLikelyEmployeeName(directName) || isPossibleSingleEmployeeName(directName)) &&
-      (await findEmployee(directName))
-    ) {
-      employeeName = directName;
-    }
-  }
+  // Only an explicit request ("tell me about …", "who is …", "employee …")
+  // starts a lookup, and it always asks for verification first. A bare name used
+  // to be checked against the directory BEFORE verification, and only real
+  // employees got the verification prompt — so anyone could learn who works at
+  // RDC by typing names.
+  const employeeName = extractEmployeeName(message);
   if (!employeeName) return { handled: false };
 
   const activeAuth = await latestActiveVerifiedEmployeeAuth(sessionId);
