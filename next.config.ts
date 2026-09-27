@@ -20,9 +20,20 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "microphone=(self), camera=(), geolocation=(), payment=()" },
 ];
 
+// Browser code gets NEXT_PUBLIC_* values baked in at build time, and the
+// Docker build sees neither the Railway variables nor .env (.dockerignore), so
+// voice was switched off in every build: the reply was never spoken. Voice is
+// the point of this bot, so it is on unless a build sets a flag to "false".
+const flag = (name: string, fallback: string) => process.env[name] || fallback;
+
 const nextConfig: NextConfig = {
   ...(basePath ? { basePath } : {}),
-  env: { NEXT_PUBLIC_BASE_PATH: basePath },
+  env: {
+    NEXT_PUBLIC_BASE_PATH: basePath,
+    NEXT_PUBLIC_ENABLE_TTS: flag("NEXT_PUBLIC_ENABLE_TTS", "true"),
+    NEXT_PUBLIC_USE_AI_TTS: flag("NEXT_PUBLIC_USE_AI_TTS", "true"),
+    NEXT_PUBLIC_ENABLE_VOICE_UI: flag("NEXT_PUBLIC_ENABLE_VOICE_UI", "true"),
+  },
   poweredByHeader: false,
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
