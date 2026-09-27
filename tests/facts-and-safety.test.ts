@@ -4,6 +4,7 @@ import { readFileSync } from "fs";
 import { FACTS, PLANT_LOCATIONS, factsOfRecord } from "../src/lib/facts";
 import { rateLimitedKey } from "../src/lib/rateLimit";
 import { extractEmployeeName } from "../src/lib/employee/directory";
+import { keepBrandNamesInEnglish } from "../src/lib/ai/aiService";
 
 test("facts of record: the official website, numbers and plant count RDC gave", () => {
   const block = factsOfRecord();
@@ -38,6 +39,15 @@ test("plant knowledge: every commercial plant, the count of record, nothing on d
   assert.match(factsOfRecord(), /Commercial plant locations[^\n]*Bengaluru \(12\)/);
   // "Region" is an internal RDC business unit, never a way to describe geography.
   for (const chunk of chunks) assert.doesNotMatch(JSON.stringify(chunk), /region/i);
+});
+
+test("brand names stay in English letters in Hindi replies", () => {
+  assert.equal(
+    keepBrandNamesInEnglish("आरडीसी कंक्रीट 21 राज्यों में है। RDC तारा से संपर्क करें।"),
+    "RDC Concrete 21 राज्यों में है। RDC Tara से संपर्क करें।",
+  );
+  // The ordinary word for star is left alone.
+  assert.equal(keepBrandNamesInEnglish("आसमान में एक तारा है"), "आसमान में एक तारा है");
 });
 
 test("per-chat rate limit: the 21st message in a minute is refused, another chat is not", () => {

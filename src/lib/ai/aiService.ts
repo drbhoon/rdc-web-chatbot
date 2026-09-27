@@ -301,6 +301,18 @@ async function openAIResponse(request: AIRequest, model: string): Promise<string
   return text;
 }
 
+/**
+ * Puts RDC's names back in English letters. The prompt asks for this, but in
+ * Hindi the model still writes "आरडीसी" or "RDC तारा" now and then, mostly
+ * when the user did. "तारा" (star) is changed only right after RDC.
+ */
+export function keepBrandNamesInEnglish(text: string): string {
+  return text
+    .replace(/आर\s?\.?\s?डी\s?\.?\s?सी/g, "RDC")
+    .replace(/RDC\s+(तारा|टारा)/g, "RDC Tara")
+    .replace(/RDC\s+(कंक्रीट|कांक्रीट)/g, "RDC Concrete");
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Entry Point
 // ─────────────────────────────────────────────────────────────────────────────
@@ -349,7 +361,7 @@ export async function generateAIResponse(request: AIRequest): Promise<AIResponse
   }
 
   const unanswered = content.includes("[[UNANSWERED]]");
-  content = content.replaceAll("[[UNANSWERED]]", "").trim();
+  content = keepBrandNamesInEnglish(content.replaceAll("[[UNANSWERED]]", "").trim());
   const processingMs = Date.now() - startTime;
 
   return {
