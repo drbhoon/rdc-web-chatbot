@@ -344,6 +344,20 @@ body {
   animation: saathi-natural-blink 6.4s linear infinite;
 }
 
+/* The moving avatar (LiveAvatarCanvas) replaces the still frames once drawn. */
+.saathi-live-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  width: 100%;
+  height: 100%;
+  filter: saturate(0.96) contrast(0.99);
+}
+
+.saathi-avatar-photo.is-live .saathi-face-frame {
+  visibility: hidden;
+}
+
 .mode-listening .saathi-avatar-halo {
   border-color: rgba(5, 150, 105, 0.52);
   background: radial-gradient(circle, rgba(16, 185, 129, 0.16) 0%, rgba(255, 255, 255, 0) 68%);

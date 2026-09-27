@@ -1,10 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import { withBase } from "@/lib/basePath";
 import { Mic, Sparkles, Volume2 } from "lucide-react";
-
-type AvatarMode = "idle" | "listening" | "thinking" | "speaking";
+import type { AvatarMode } from "@/lib/avatar/motion";
+import LiveAvatarCanvas from "./LiveAvatarCanvas";
 
 interface SaathiAvatarProps {
   mode: AvatarMode;
@@ -48,12 +49,16 @@ export default function SaathiAvatar({
   const energy = mode === "speaking" ? Math.max(0, Math.min(1, speechEnergy)) : 0;
   const speakingFrame = energy < 0.18 ? "rest" : energy < 0.62 ? "soft" : "open";
   const label = modeLabel(mode, language);
+  // The still images show until the live (moving) avatar has drawn its first
+  // frame, and stay if it cannot run (no WebGL).
+  const [liveReady, setLiveReady] = useState(false);
 
   return (
     <section className={`saathi-avatar-shell mode-${mode}`} aria-label={`RDC Saathi: ${label}`}>
       <div className="saathi-avatar-stage" aria-hidden="true">
         <div className="saathi-avatar-halo" />
-        <div className="saathi-avatar-photo">
+        <div className={`saathi-avatar-photo ${liveReady ? "is-live" : ""}`}>
+          <LiveAvatarCanvas mode={mode} speechEnergy={speechEnergy} className="saathi-live-canvas" onReady={setLiveReady} />
           <Image
             src={withBase("/saathi-avatar-v2.png")}
             alt=""
