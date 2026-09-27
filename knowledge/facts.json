@@ -13,6 +13,11 @@
     "link": "https://wa.me/918657940541",
     "handles": "booking a concrete order, raising a complaint, or asking a question, 24x7"
   },
+  "footprint": {
+    "states": 21,
+    "unionTerritories": 2,
+    "cities": 53
+  },
   "plants": {
     "total": 141,
     "commercial": 113,

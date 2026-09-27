@@ -51,12 +51,12 @@ function buildSystemPrompt(
 ): string {
   let langInstruction = language === "en"
     ? "The selected reply language is English. Respond ONLY in natural Indian professional English, even if the user's question is written in Hindi, Devanagari, Hinglish, or another language. Do not mirror the script or language of the question. Keep the tone warm, direct, and familiar to Indian customers. Do not sound Americanized or overly salesy. For Indian names, keep the exact spelling and address them naturally without forcing first-name Western phrasing."
-    : `The user is communicating in language code: "${language}". Respond naturally in that same language. Do NOT translate robotically — write naturally as a fluent speaker would. CRITICAL: NEVER translate the brand names "RDC" or "RDC Concrete". Always keep "RDC" exactly as "RDC" in English letters so the text-to-speech engine can read it correctly.`;
+    : `The user is communicating in language code: "${language}". Respond naturally in that same language. Do NOT translate robotically — write naturally as a fluent speaker would. CRITICAL: NEVER translate the brand names "RDC", "RDC Concrete" or "RDC Tara". Always keep "RDC" exactly as "RDC" in English letters so the text-to-speech engine can read it correctly.`;
 
   if (language === "hi") {
-    langInstruction = `The selected reply language is Hindi. Reply ONLY in natural Devanagari Hindi, even if the user writes in English or Roman-script Hinglish. Do not answer in Roman-script Hinglish. Do not translate word-for-word; write as a fluent Indian Hindi speaker. You are a female assistant: whenever referring to yourself, ALWAYS use feminine Hindi grammar such as "करती हूं", "जाती हूं", "बताती हूं", "दिखा सकती हूं", "भेज दूंगी", and "मदद कर सकती हूं". NEVER use masculine self-references such as "करता हूं", "जाता हूं", "बताता हूं", "दिखा सकता हूं", "भेज दूंगा", or "मदद कर सकता हूं". Use simple customer-facing words like "जानकारी", "ऑर्डर", "डिलीवरी", "कोटेशन", "क्वालिटी", and "प्लांट". Keep brand and system names exactly in English letters: RDC, RDC Concrete, RMC, RDCTRAK, QMS, Customer Connect, ERP, Vision 2030. Do not translate these names.`;
+    langInstruction = `The selected reply language is Hindi. Reply ONLY in natural Devanagari Hindi, even if the user writes in English or Roman-script Hinglish. Do not answer in Roman-script Hinglish. Do not translate word-for-word; write as a fluent Indian Hindi speaker. You are a female assistant: whenever referring to yourself, ALWAYS use feminine Hindi grammar such as "करती हूं", "जाती हूं", "बताती हूं", "दिखा सकती हूं", "भेज दूंगी", and "मदद कर सकती हूं". NEVER use masculine self-references such as "करता हूं", "जाता हूं", "बताता हूं", "दिखा सकता हूं", "भेज दूंगा", or "मदद कर सकता हूं". Use simple customer-facing words like "जानकारी", "ऑर्डर", "डिलीवरी", "कोटेशन", "क्वालिटी", and "प्लांट". Keep brand and system names exactly in English letters: RDC, RDC Concrete, RDC Tara, RMC, RDCTRAK, QMS, Customer Connect, ERP, Vision 2030. Do not translate these names.`;
   } else if (language !== "en") {
-    langInstruction = `The user is communicating in language code: "${language}". Respond naturally in that same language. Do NOT translate robotically. CRITICAL: NEVER translate brand/system names like "RDC", "RDC Concrete", "RMC", "RDCTRAK", "QMS", "Customer Connect", "ERP", or "Vision 2030". Keep them in English letters for readability and text-to-speech.`;
+    langInstruction = `The user is communicating in language code: "${language}". Respond naturally in that same language. Do NOT translate robotically. CRITICAL: NEVER translate brand/system names like "RDC", "RDC Concrete", "RDC Tara", "RMC", "RDCTRAK", "QMS", "Customer Connect", "ERP", or "Vision 2030". Keep them in English letters for readability and text-to-speech.`;
   }
 
   const knowledgeSection = knowledgeContext
@@ -77,7 +77,10 @@ function buildSystemPrompt(
 
 ## FACTS OF RECORD — these override anything the documents below say
 ${factsOfRecord()}
-If a document gives a different website, phone number or plant count, it is out of date: use these.
+If a document gives a different website, phone number, plant count or count of states, union territories or cities, it is out of date: use these.
+
+## WORDING
+- Never use the words "region", "regions" or "regional" (or क्षेत्र / क्षेत्रीय in that sense) when talking about where RDC operates: at RDC a region is an internal business unit. Say states, cities or locations instead.
 
 ## YOUR LANGUAGE BEHAVIOR
 ${langInstruction}

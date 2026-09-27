@@ -3,21 +3,28 @@
     python scripts/buildPlantKnowledge.py "<path to Plant Names and addresses.xlsx>"
 
 Writes knowledge/public/commercial-plants.jsonl: one chunk per commercial plant
-(its locality, region and full address), plus one overview chunk that states
-the plant count of record and lists every commercial plant by region. Load it
-into the database with `npx tsx scripts/replacePlantKnowledge.ts`.
+(its locality, the city or state it belongs to, and its full address), plus one
+overview chunk that states the plant count of record and lists every
+commercial plant by location. Load it into the database with
+`npx tsx scripts/replacePlantKnowledge.ts`.
 
 Only COMMERCIAL plants go in. RDC does not publish details of its dedicated
 (project) plants, so they appear only as a count, taken from
 knowledge/facts.json — the list itself never mentions them.
 
+Wording: nothing here says "region". At RDC a region is an internal corporate
+unit, so the bot must not use the word for geography (RDC, 2026-09-27). The
+overview states the footprint of record (states, union territories, cities)
+from knowledge/facts.json rather than counting the groups below, which are
+customer-facing place names, not an official count.
+
 The Excel is HR/BD's list, not ours: expected columns are S. No, ERP Name
-(key), Display Name, and Full Address. Plants are grouped by the region code
-that starts every Display Name ("BG-Anjanapura" -> Bengaluru, locality
-Anjanapura). The ERP names are not used for grouping: they spell the same city
-several ways ("Bangalore", "Banglore") and sometimes name a state instead. A
-region code not in REGIONS stops the build, so a new region is named on purpose
-rather than guessed.
+(key), Display Name, and Full Address. Plants are grouped by the code that
+starts every Display Name ("BG-Anjanapura" -> Bengaluru, locality Anjanapura).
+The ERP names are not used for grouping: they spell the same city several
+ways ("Bangalore", "Banglore") and sometimes name a state instead. A code not
+in LOCATIONS stops the build, so a new one is named on purpose rather than
+guessed.
 """
 import collections
 import hashlib
@@ -34,7 +41,8 @@ FACTS = json.loads((ROOT / "knowledge" / "facts.json").read_text(encoding="utf-8
 SOURCE = "RDC Commercial Plants"
 TAGS = ["plants", "public_knowledge", "rdc", "commercial_plants", "plant_addresses"]
 
-REGIONS = {
+# Display-name code -> the city or state name a customer would use.
+LOCATIONS = {
     "AP": "Andhra Pradesh", "ASM": "Assam", "BG": "Bengaluru", "BHR": "Bihar", "CHA": "Chhattisgarh",
     "CHE": "Chennai", "GOA": "Goa", "GUJ": "Gujarat", "HYD": "Hyderabad", "JHA": "Jharkhand",
     "JK": "Jammu & Kashmir", "KAR": "Karnataka", "KER": "Kerala", "KOL": "Kolkata", "MH": "Maharashtra",
@@ -48,12 +56,12 @@ def clean(value) -> str:
     return re.sub(r"\s*,\s*(,\s*)+", ", ", text).strip(" ,")
 
 
-def region_and_locality(display: str) -> tuple[str, str]:
+def location_and_locality(display: str) -> tuple[str, str]:
     code, _, rest = display.partition("-")
     code = code.strip().upper()
-    if code not in REGIONS:
-        raise SystemExit(f"Unknown region code {code!r} in {display!r}: add it to REGIONS in this script.")
-    return REGIONS[code], clean(rest) or display
+    if code not in LOCATIONS:
+        raise SystemExit(f"Unknown location code {code!r} in {display!r}: add it to LOCATIONS in this script.")
+    return LOCATIONS[code], clean(rest) or display
 
 
 def chunk_id(text: str) -> str:
@@ -70,8 +78,8 @@ def main(path: str) -> None:
         if not (erp and display and address):
             raise SystemExit(f"Row {row[0]}: a plant needs an ERP name, a display name and an address.")
         pin = (re.findall(r"\b(\d{6})\b", address) or [""])[-1]
-        region, locality = region_and_locality(display)
-        plants.append({"erp": erp, "display": display, "address": address, "region": region,
+        location, locality = location_and_locality(display)
+        plants.append({"erp": erp, "display": display, "address": address, "location": location,
                        "locality": locality, "pin": pin})
 
     expected = FACTS["plants"]["commercial"]
@@ -86,22 +94,24 @@ def main(path: str) -> None:
 
     chunks = []
     for p in plants:
-        text = (f"RDC commercial ready-mix concrete plant: {p['locality']}, {p['region']} "
+        text = (f"RDC commercial ready-mix concrete plant: {p['locality']}, {p['location']} "
                 f"(plant name {p['display']}; ERP {p['erp']}). Address: {p['address']}."
                 + (f" PIN code {p['pin']}." if p["pin"] else "") + f" {contact}")
         chunks.append({"id": chunk_id(text), "text": text,
-                       "metadata": {"sourceName": SOURCE, "tags": TAGS, "region": p["region"], "pin": p["pin"]}})
+                       "metadata": {"sourceName": SOURCE, "tags": TAGS, "location": p["location"], "pin": p["pin"]}})
 
-    by_region = collections.defaultdict(list)
+    by_location = collections.defaultdict(list)
     for p in plants:
-        by_region[p["region"]].append(p["locality"])
-    lines = [f"- {region} ({len(names)}): " + ", ".join(sorted(names)) for region, names in sorted(by_region.items())]
+        by_location[p["location"]].append(p["locality"])
+    lines = [f"- {place} ({len(names)}): " + ", ".join(sorted(names)) for place, names in sorted(by_location.items())]
     dedicated = FACTS["plants"]["total"] - expected
-    overview = (f"RDC Concrete (India) Limited operates {FACTS['plants']['total']} ready-mix concrete plants as on "
-                f"{FACTS['asOf']}: {expected} commercial plants serving customers across {len(by_region)} regions "
-                f"of India, and {dedicated} dedicated plants set up for specific customer projects. Details of "
-                f"dedicated plants are not shared. The commercial plants, by region and locality:\n"
-                + "\n".join(lines) + f"\n{contact}")
+    reach = FACTS["footprint"]
+    overview = (f"RDC Concrete (India) Limited serves customers in {reach['states']} states, "
+                f"{reach['unionTerritories']} union territories and {reach['cities']} cities of India. "
+                f"It operates {FACTS['plants']['total']} ready-mix concrete plants as on "
+                f"{FACTS['asOf']}: {expected} commercial plants serving customers, and {dedicated} dedicated plants "
+                f"set up for specific customer projects. Details of dedicated plants are not shared. "
+                f"The commercial plants, by location:\n" + "\n".join(lines) + f"\n{contact}")
     chunks.insert(0, {"id": chunk_id(overview), "text": overview,
                       "metadata": {"sourceName": SOURCE, "tags": TAGS, "overview": True}})
 
@@ -109,7 +119,7 @@ def main(path: str) -> None:
     with OUT.open("w", encoding="utf-8", newline="\n") as f:
         for chunk in chunks:
             f.write(json.dumps(chunk, ensure_ascii=False) + "\n")
-    print(f"Wrote {len(chunks)} chunks ({len(plants)} plants in {len(by_region)} regions + 1 overview) to {OUT}")
+    print(f"Wrote {len(chunks)} chunks ({len(plants)} commercial plants + 1 overview) to {OUT}")
 
 
 if __name__ == "__main__":

@@ -23,6 +23,7 @@ export function factsOfRecord(): string {
     `- Head office: ${facts.headOffice.address}. Phone for calls: ${facts.headOffice.phone}.`,
     `- ${facts.tara.name} is RDC's WhatsApp assistant on ${facts.tara.whatsapp} (${facts.tara.link}), for ${facts.tara.handles}.`,
     `- Local plant phone numbers are listed on ${facts.contactPage}.`,
+    `- Presence: RDC serves customers in ${facts.footprint.states} states, ${facts.footprint.unionTerritories} union territories and ${facts.footprint.cities} cities of India.`,
     `- Plants: RDC operates ${facts.plants.total} ready-mix concrete plants as on ${facts.asOf} — ${facts.plants.commercial} commercial plants and ${dedicated} dedicated plants built for specific customer projects.`,
   ].join("\n");
 }

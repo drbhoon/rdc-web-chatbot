@@ -13,6 +13,7 @@ test("facts of record: the official website, numbers and plant count RDC gave", 
   assert.match(block, /\+91 86579 40541/);
   assert.match(block, /141 ready-mix concrete plants/);
   assert.match(block, /113 commercial plants and 28 dedicated plants/);
+  assert.match(block, /21 states, 2 union territories and 53 cities/);
   assert.doesNotMatch(block, /rdcconcrete/);
 });
 
@@ -22,12 +23,15 @@ test("plant knowledge: every commercial plant, the count of record, nothing on d
   const [overview, ...plants] = chunks;
   assert.match(overview.text, /operates 141 [\s\S]* 113 commercial plants [\s\S]* 28 dedicated plants/);
   assert.match(overview.text, /Details of dedicated plants are not shared/);
+  assert.match(overview.text, /21 states, 2 union territories and 53 cities/);
   for (const plant of plants) {
     assert.match(plant.text, /^RDC commercial ready-mix concrete plant: /);
     assert.match(plant.text, /WhatsApp at \+91 86579 40541/);
     assert.doesNotMatch(plant.text, /captive|dedicated/i);
   }
   assert.equal(new Set(chunks.map((c) => c.id)).size, chunks.length, "chunk ids are unique");
+  // "Region" is an internal RDC business unit, never a way to describe geography.
+  for (const chunk of chunks) assert.doesNotMatch(JSON.stringify(chunk), /region/i);
 });
 
 test("per-chat rate limit: the 21st message in a minute is refused, another chat is not", () => {
