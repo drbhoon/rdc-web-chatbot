@@ -2,6 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readableText, spokenExcerpt } from "../src/lib/voice/voiceService";
 import { captionSentences, currentSentence } from "../src/components/chat/SaathiAvatar";
+import { speechInput } from "../src/lib/voice/speechInstructions";
+
+test("the voice says Taara (तारा) and spells out R D C; the written text is untouched", () => {
+  assert.equal(speechInput("Message RDC Tara on WhatsApp. I am TARA Online.", "en"), "Message R D C Taara on WhatsApp. I am Taara Online.");
+  assert.equal(speechInput("WhatsApp पर RDC Tara को मैसेज करें।", "hi"), "WhatsApp पर R D C तारा को मैसेज करें।");
+  // Only the name: other words containing "tara" are left alone.
+  assert.equal(speechInput("Guitarist Tarak visited Taratala.", "en"), "Guitarist Tarak visited Taratala.");
+});
 
 const reply = [
   "RDC Concrete (India) Limited makes ready-mix concrete.",

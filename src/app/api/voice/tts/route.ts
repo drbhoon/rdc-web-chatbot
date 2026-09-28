@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimited } from "@/lib/rateLimit";
-import { speechInstructions } from "@/lib/voice/speechInstructions";
+import { speechInput, speechInstructions } from "@/lib/voice/speechInstructions";
 
 const LANGUAGE_NAMES: Record<string, string> = {
   en: "Indian English",
@@ -14,16 +14,6 @@ const LANGUAGE_NAMES: Record<string, string> = {
   pa: "Punjabi",
   bn: "Bengali",
 };
-
-function prepareSpeechText(value: string): string {
-  return value
-    .replace(/\[([^\]]+)]\([^)]+\)/g, "$1")
-    .replace(/[*_~#`]/g, "")
-    .replace(/\bRDC\b/g, "R D C")
-    .trim()
-    // An answer is 150-250 words; anything much longer is not a chat reply.
-    .slice(0, 2000);
-}
 
 export async function POST(request: NextRequest) {
   // Each call is paid speech synthesis, and the endpoint is public.
@@ -48,7 +38,7 @@ export async function POST(request: NextRequest) {
 
   const languageCode = typeof payload.language === "string" ? payload.language : "en";
   const language = LANGUAGE_NAMES[languageCode] || LANGUAGE_NAMES.en;
-  const input = prepareSpeechText(payload.text);
+  const input = speechInput(payload.text, languageCode);
 
   try {
     const response = await fetch("https://api.openai.com/v1/audio/speech", {
@@ -59,7 +49,8 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         model: process.env.OPENAI_TTS_MODEL || "gpt-4o-mini-tts",
-        voice: process.env.OPENAI_TTS_VOICE || "coral",
+        // "sage", chosen by RDC from recorded samples (2026-09-28).
+        voice: process.env.OPENAI_TTS_VOICE || "sage",
         input,
         response_format: "mp3",
         stream_format: "audio",
