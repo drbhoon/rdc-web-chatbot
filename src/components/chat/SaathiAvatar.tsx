@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { withBase } from "@/lib/basePath";
 import { Mic, Sparkles, Volume2 } from "lucide-react";
 import type { AvatarMode } from "@/lib/avatar/motion";
 import LiveAvatarCanvas from "./LiveAvatarCanvas";
+import { readableText, spokenExcerpt } from "@/lib/voice/voiceService";
 
 interface SaathiAvatarProps {
   mode: AvatarMode;
@@ -13,6 +14,57 @@ interface SaathiAvatarProps {
   language: string;
   languageDisabled?: boolean;
   onLanguageChange: (language: "en" | "hi") => void;
+  /** Her latest reply, shown beside her; null while she is thinking. */
+  caption?: string | null;
+  /** How far she is through reading it aloud (0..1), or null when not speaking. */
+  captionProgress?: number | null;
+}
+
+/** Splits a reply into sentences, keeping the spaces so the pieces add back up. */
+export function captionSentences(text: string): string[] {
+  const display = readableText(text);
+  return display.match(/[^.!?।]+(?:[.!?।]+|$)\s*/g) || [display];
+}
+
+/** The sentence being spoken at `progress` through the part that is read aloud. */
+export function currentSentence(text: string, progress: number | null | undefined): number {
+  if (progress === null || progress === undefined) return -1;
+  const at = progress * spokenExcerpt(text).length;
+  let end = 0;
+  const sentences = captionSentences(text);
+  for (let i = 0; i < sentences.length; i++) {
+    end += sentences[i].length;
+    if (at < end) return i;
+  }
+  return sentences.length - 1;
+}
+
+function Caption({ text, progress }: { text: string; progress: number | null | undefined }) {
+  const box = useRef<HTMLDivElement>(null);
+  const sentences = captionSentences(text);
+  const current = currentSentence(text, progress);
+
+  // Keep the sentence being spoken in view, scrolling the box, not the page.
+  useEffect(() => {
+    const container = box.current;
+    const line = container?.querySelector<HTMLElement>(".is-current");
+    if (!container || !line) return;
+    const top = line.offsetTop - container.offsetTop;
+    if (top < container.scrollTop || top + line.offsetHeight > container.scrollTop + container.clientHeight) {
+      container.scrollTo({ top: Math.max(0, top - 8), behavior: "smooth" });
+    }
+  }, [current]);
+  useEffect(() => { box.current?.scrollTo({ top: 0 }); }, [text]);
+
+  return (
+    <div ref={box} className="saathi-caption" aria-live="polite">
+      {sentences.map((sentence, i) => (
+        <span key={i} className={i === current ? "is-current" : current >= 0 && i > current ? "is-ahead" : undefined}>
+          {sentence}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 const STATUS_LABELS: Record<string, Record<AvatarMode, string>> = {
@@ -45,6 +97,8 @@ export default function SaathiAvatar({
   language,
   languageDisabled = false,
   onLanguageChange,
+  caption = null,
+  captionProgress = null,
 }: SaathiAvatarProps) {
   const energy = mode === "speaking" ? Math.max(0, Math.min(1, speechEnergy)) : 0;
   const speakingFrame = energy < 0.18 ? "rest" : energy < 0.62 ? "soft" : "open";
@@ -96,6 +150,7 @@ export default function SaathiAvatar({
         </div>
       </div>
 
+      <div className="saathi-avatar-side">
       <div className="saathi-avatar-meta">
         <div className="saathi-avatar-name">TARA Online</div>
         <div className="saathi-avatar-role">AI-generated female voice</div>
@@ -124,6 +179,8 @@ export default function SaathiAvatar({
           <span>{label}</span>
           {language !== "en" && <span className="saathi-avatar-lang">{language.toUpperCase()}</span>}
         </div>
+      </div>
+      {caption && <Caption text={caption} progress={captionProgress} />}
       </div>
     </section>
   );

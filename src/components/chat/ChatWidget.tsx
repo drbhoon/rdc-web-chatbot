@@ -149,6 +149,8 @@ export default function ChatWidget() {
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [avatarMode, setAvatarMode] = useState<AvatarMode>("idle");
   const [speechEnergy, setSpeechEnergy] = useState(0);
+  // How far TARA is through reading her latest reply (for the caption), or null.
+  const [spokenProgress, setSpokenProgress] = useState<number | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -157,6 +159,7 @@ export default function ChatWidget() {
 
   const stopAvatarSpeech = useCallback(() => {
     setSpeechEnergy(0);
+    setSpokenProgress(null);
     setAvatarMode((current) => (current === "speaking" ? "idle" : current));
   }, []);
 
@@ -266,6 +269,7 @@ export default function ChatWidget() {
       }));
       setAvatarMode("thinking");
       setSpeechEnergy(0);
+      setSpokenProgress(null);
 
       setInputValue("");
 
@@ -310,6 +314,7 @@ export default function ChatWidget() {
             language: data.detectedLanguage,
             onStart: () => setAvatarMode("speaking"),
             onEnergy: setSpeechEnergy,
+            onProgress: setSpokenProgress,
             onBoundary: (event) => {
               const charLength = event.charLength || 4;
               setSpeechEnergy(Math.min(1, 0.25 + charLength / 12));
@@ -476,6 +481,10 @@ export default function ChatWidget() {
               language={state.detectedLanguage}
               languageDisabled={state.isLoading}
               onLanguageChange={handleLanguageChange}
+              // Her latest reply stays readable beside her even when the
+              // WhatsApp card fills the message strip below.
+              caption={state.isLoading ? null : [...state.messages].reverse().find((m) => m.role === "assistant")?.content ?? null}
+              captionProgress={spokenProgress}
             />
 
             {/* Messages */}

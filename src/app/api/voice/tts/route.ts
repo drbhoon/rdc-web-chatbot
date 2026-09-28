@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimited } from "@/lib/rateLimit";
+import { speechInstructions } from "@/lib/voice/speechInstructions";
 
 const LANGUAGE_NAMES: Record<string, string> = {
   en: "Indian English",
@@ -62,13 +63,7 @@ export async function POST(request: NextRequest) {
         input,
         response_format: "mp3",
         stream_format: "audio",
-        instructions: [
-          `Speak in ${language}.`,
-          "Use a warm, natural Indian female voice with a clear Indian accent.",
-          "Sound friendly, confident, and conversational, like a helpful professional colleague.",
-          "Use expressive but restrained intonation, gentle pauses, and a comfortable pace.",
-          "Avoid an American accent, exaggerated enthusiasm, and robotic delivery.",
-        ].join(" "),
+        instructions: speechInstructions(languageCode, language),
       }),
       cache: "no-store",
     });

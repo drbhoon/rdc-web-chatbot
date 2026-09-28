@@ -20,6 +20,8 @@ export interface TTSOptions {
   onStart?: () => void;
   onEnd?: () => void;
   onEnergy?: (energy: number) => void;
+  /** How far through the spoken text the voice is, 0..1, several times a second. */
+  onProgress?: (fraction: number) => void;
   onBoundary?: (event: { charIndex: number; charLength?: number; name?: string }) => void;
 }
 
@@ -42,6 +44,12 @@ let activeAudioContext: AudioContext | null = null;
 let activeAnimationFrame: number | null = null;
 let activeRequest: AbortController | null = null;
 let fallbackEnergyTimer: number | null = null;
+let progressTimer: number | null = null;
+
+// "R D C", so the voice spells it out instead of reading a word.
+const forSpeech = (text: string) => text.replace(/\bRDC\b/g, "R D C");
+// Roughly how fast the voice speaks, for progress before the audio's length is known.
+const CHARS_PER_SECOND = 14;
 
 export function isSpeechRecognitionSupported(): boolean {
   if (typeof window === "undefined") return false;
@@ -85,16 +93,23 @@ export function isTTSSupported(): boolean {
   return typeof Audio !== "undefined" || "speechSynthesis" in window;
 }
 
-function cleanSpeechText(text: string): string {
+/**
+ * A reply as it is read aloud and captioned: links reduced to their text, list
+ * markers and markdown symbols dropped, one line. The caption shows this, and
+ * the voice speaks the start of it, so the two stay in step.
+ */
+export function readableText(text: string): string {
   return text
     .replace(/\[([^\]]+)]\([^)]+\)/g, "$1")
+    .replace(/^\s*(?:[-•*]|\d+\.)\s+/gm, "")
     .replace(/[*_~#`]/g, "")
-    .replace(/\bRDC\b/g, "R D C")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
-function conversationalSpeechText(text: string, maxLength = 560): string {
-  const cleaned = cleanSpeechText(text).replace(/\s+/g, " ");
+/** The part of a reply the voice actually reads: whole sentences, up to ~560 characters. */
+export function spokenExcerpt(text: string, maxLength = 560): string {
+  const cleaned = readableText(text);
   if (cleaned.length <= maxLength) return cleaned;
 
   const sentences = cleaned.match(/[^.!?।]+[.!?।]+/g) || [];
@@ -111,6 +126,10 @@ function conversationalSpeechText(text: string, maxLength = 560): string {
 }
 
 function releaseGeneratedAudio(): void {
+  if (progressTimer !== null) {
+    window.clearInterval(progressTimer);
+    progressTimer = null;
+  }
   if (activeAnimationFrame !== null) {
     window.cancelAnimationFrame(activeAnimationFrame);
     activeAnimationFrame = null;
@@ -159,7 +178,7 @@ async function speakGeneratedAudio(options: TTSOptions): Promise<boolean> {
   const response = await fetch(withBase("/api/voice/tts"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text: conversationalSpeechText(options.text), language: options.language }),
+    body: JSON.stringify({ text: forSpeech(spokenExcerpt(options.text)), language: options.language }),
     signal: activeRequest.signal,
   });
   if (!response.ok) throw new Error(`Natural voice request failed: ${response.status}`);
@@ -231,6 +250,15 @@ async function startAudioElement(audio: HTMLAudioElement, options: TTSOptions): 
     if (started) return;
     started = true;
     options.onStart?.();
+    if (options.onProgress) {
+      // A streamed reply has no known length until it has all arrived; until
+      // then, estimate it from the text.
+      const estimate = spokenExcerpt(options.text).length / CHARS_PER_SECOND;
+      progressTimer = window.setInterval(() => {
+        const total = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : estimate;
+        options.onProgress?.(Math.min(1, audio.currentTime / total));
+      }, 120);
+    }
     if (context) {
       void context.resume();
       startEnergyTracking(audio, context, options.onEnergy);
@@ -256,7 +284,8 @@ async function startAudioElement(audio: HTMLAudioElement, options: TTSOptions): 
 function speakWithBrowserVoice(options: TTSOptions): boolean {
   if (!("speechSynthesis" in window)) return false;
 
-  const utterance = new SpeechSynthesisUtterance(conversationalSpeechText(options.text));
+  const spoken = forSpeech(spokenExcerpt(options.text));
+  const utterance = new SpeechSynthesisUtterance(spoken);
   const targetLang = LANGUAGE_TAGS[options.language] || LANGUAGE_TAGS.en;
   utterance.lang = targetLang;
   utterance.rate = options.rate ?? 0.94;
@@ -280,6 +309,7 @@ function speakWithBrowserVoice(options: TTSOptions): boolean {
   };
   utterance.onboundary = (event) => {
     options.onBoundary?.({ charIndex: event.charIndex, charLength: event.charLength, name: event.name });
+    options.onProgress?.(Math.min(1, event.charIndex / Math.max(1, spoken.length)));
   };
   const finish = () => {
     if (fallbackEnergyTimer !== null) {
@@ -314,6 +344,10 @@ export async function speakText(options: TTSOptions): Promise<boolean> {
 }
 
 export function stopSpeaking(): void {
+  if (progressTimer !== null) {
+    window.clearInterval(progressTimer);
+    progressTimer = null;
+  }
   activeRequest?.abort();
   activeRequest = null;
   releaseGeneratedAudio();

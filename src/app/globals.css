@@ -264,8 +264,10 @@ body {
   height: 100%;
 }
 
+/* Its width now comes from .saathi-avatar-side; in that column it takes its
+   natural height. */
 .saathi-fullscreen .saathi-avatar-meta {
-  flex: 0 1 260px;
+  flex: none;
 }
 
 .saathi-fullscreen .saathi-avatar-name {
@@ -462,6 +464,48 @@ body {
   font-size: 0.62rem;
 }
 
+/* Beside the avatar: name, language, status, and what she is saying. */
+.saathi-avatar-side {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.saathi-fullscreen .saathi-avatar-side {
+  flex: 0 1 400px;
+}
+
+/* Her latest reply, the sentence being spoken highlighted. It keeps the text
+   readable while the message strip below is taken by the WhatsApp card. */
+.saathi-caption {
+  max-height: 34dvh;
+  margin-top: 14px;
+  overflow-y: auto;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 4px 18px rgba(15, 30, 53, 0.06);
+  color: #334155;
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.saathi-caption span {
+  border-radius: 4px;
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+.saathi-caption .is-current {
+  background: rgba(249, 115, 22, 0.14);
+  color: #0f172a;
+}
+
+.saathi-caption .is-ahead {
+  color: #94a3b8;
+}
+
 @media (max-width: 420px) {
   .saathi-avatar-shell {
     gap: 11px;
@@ -519,6 +563,24 @@ body {
     background: rgba(255, 255, 255, 0.9);
     box-shadow: 0 4px 18px rgba(15, 30, 53, 0.08);
     backdrop-filter: blur(8px);
+  }
+
+  /* On a phone the side column dissolves: the name card stays top right and
+     the caption sits over the lower part of the portrait. */
+  .saathi-fullscreen .saathi-avatar-side { display: contents; }
+
+  .saathi-fullscreen .saathi-caption {
+    position: absolute;
+    z-index: 5;
+    right: 10px;
+    bottom: 10px;
+    left: 10px;
+    max-height: 21dvh;
+    margin: 0;
+    padding: 9px 11px;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(8px);
+    font-size: 0.84rem;
   }
 
   .saathi-fullscreen .saathi-avatar-name { font-size: 0.9rem; }
