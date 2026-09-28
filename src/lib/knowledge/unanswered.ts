@@ -12,7 +12,7 @@ export async function recordUnanswered(question: string, language: string, reaso
 }
 
 /** An answer RDC has refined for exactly this question, if there is one. */
-export async function approvedAnswerFor(question: string): Promise<{question: string; answer: string} | null> {
+export async function approvedAnswerFor(question: string): Promise<{question: string; answer: string; language: string} | null> {
   const row = await prisma.unansweredQuestion.findUnique({where: {fingerprint: questionFingerprint(question)}});
-  return row?.status === "answered" && row.answer ? {question: row.question, answer: row.answer} : null;
+  return row?.status === "answered" && row.answer ? {question: row.question, answer: row.answer, language: row.language} : null;
 }

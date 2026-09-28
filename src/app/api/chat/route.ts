@@ -14,7 +14,7 @@ import {
 import { normalizeQueryForRetrieval } from "@/lib/i18n/queryNormalizer";
 import { classifyIntent } from "@/lib/intent/classifier";
 import { retrieveRelevantChunks, APPROVED_CATEGORY, type RetrievedChunk } from "@/lib/knowledge/retrieval";
-import { generateAIResponse } from "@/lib/ai/aiService";
+import { generateAIResponse, suggestsTara } from "@/lib/ai/aiService";
 import { performWebSearch, shouldUseWebSearch } from "@/lib/search/webSearch";
 import { handleEmployeeDirectoryMessage } from "@/lib/employee/directory";
 import { approvedAnswerFor, recordUnanswered } from "@/lib/knowledge/unanswered";
@@ -232,7 +232,9 @@ export async function POST(req: NextRequest) {
     id: "approved-exact", documentId: "approved-exact", title: approved.question, category: APPROVED_CATEGORY,
     content: `Question: ${approved.question}\nApproved answer: ${approved.answer}`, score: 100, sourceType: "faq", similarityScore: 1,
   }] : [];
-  const chunks = await retrieveRelevantChunks(normalizedQuery.retrievalQuery, { topK: 12 }).then((found) => [...exactApproved, ...found]).catch(() => {
+  // Asked in the language it was refined in: RDC's words, exactly, no model.
+  const verbatim = Boolean(approved && approved.language === detectedLanguage);
+  const chunks = verbatim ? exactApproved : await retrieveRelevantChunks(normalizedQuery.retrievalQuery, { topK: 12 }).then((found) => [...exactApproved, ...found]).catch(() => {
     retrievalFailed = true;
     return [];
   });
@@ -243,7 +245,7 @@ export async function POST(req: NextRequest) {
   let webSearchContext: string | undefined;
   let usedWebSearch = false;
 
-  if (shouldUseWebSearch(classification.intent, chunks.length, Math.max(topScore, topVectorScore), message)) {
+  if (!verbatim && shouldUseWebSearch(classification.intent, chunks.length, Math.max(topScore, topVectorScore), message)) {
     const searchQuery = `RDC Concrete India ${normalizedQuery.retrievalQuery}`;
     const webResult = await performWebSearch(searchQuery);
     webSearchContext = webResult.formattedContext;
@@ -251,7 +253,9 @@ export async function POST(req: NextRequest) {
   }
 
   // ── 8. Generate AI Response ────────────────────────────────────────────────
-  const aiResult = retrievalFailed ? {
+  const aiResult = verbatim ? {
+    content: approved!.answer, confidence: 1, usedMockMode: false, suggestLeadCapture: suggestsTara(classification.intent), unanswered: false, provider: "approved",
+  } : retrievalFailed ? {
     content: detectedLanguage === "hi" ? "अभी जानकारी की पुष्टि नहीं कर पा रही हूं। आपका प्रश्न समीक्षा के लिए दर्ज किया गया है।" : "I cannot check the knowledge base right now. Your question has been recorded for review.",
     confidence: 0, usedMockMode: false, suggestLeadCapture: false, unanswered: true, provider: "unavailable",
   } : await generateAIResponse({
@@ -263,6 +267,7 @@ export async function POST(req: NextRequest) {
     retrievedChunks: chunks,
     webSearchResults: webSearchContext,
     sessionId: sessionId!,
+    approvedAnswer: approved?.answer,
   });
 
   if (aiResult.unanswered) {

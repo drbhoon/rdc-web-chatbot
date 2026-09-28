@@ -28,6 +28,8 @@ export interface AIRequest {
   retrievedChunks: RetrievedChunk[];
   webSearchResults?: string;
   sessionId: string;
+  /** RDC's refined answer to exactly this question, when it was refined in another language. */
+  approvedAnswer?: string;
 }
 
 export interface AIResponse {
@@ -49,7 +51,8 @@ function buildSystemPrompt(
   intent: Intent,
   knowledgeContext: string,
   webContext?: string,
-  retrievalQuery?: string
+  retrievalQuery?: string,
+  approvedAnswer?: string
 ): string {
   let langInstruction = language === "en"
     ? "The selected reply language is English. Respond ONLY in natural Indian professional English, even if the user's question is written in Hindi, Devanagari, Hinglish, or another language. Do not mirror the script or language of the question. Keep the tone warm, direct, and familiar to Indian customers. Do not sound Americanized or overly salesy. For Indian names, keep the exact spelling and address them naturally without forcing first-name Western phrasing."
@@ -63,6 +66,10 @@ function buildSystemPrompt(
 
   const knowledgeSection = knowledgeContext
     ? `\n\n=== RDC KNOWLEDGE BASE ===\n${knowledgeContext}\n=== END KNOWLEDGE BASE ===`
+    : "";
+
+  const approvedSection = approvedAnswer
+    ? `\n\n## RDC'S APPROVED ANSWER TO THIS EXACT QUESTION\nRDC has answered this question. Reply with this answer and nothing else, translated into the reply language, keeping every fact, figure, name, number and reference exactly:\n${approvedAnswer}`
     : "";
 
   const webSection = webContext
@@ -122,7 +129,7 @@ ${langInstruction}
 - Speak only about RDC. Do not compare RDC with named competitors or comment on other companies' products, prices, market share or reputation, even when the documents mention them. If asked, say politely that you can only speak for RDC, then share RDC's own strengths.
 
 ## APPROVED ANSWERS
-- A source marked APPROVED ANSWER was written by RDC for a customer question. If it answers the user's question (the same question, or the same thing asked in other words), give that answer: keep its facts, figures and advice exactly, only adapting the wording to the conversation and translating it into the reply language. Where it and any other source disagree, the approved answer is right.
+- A source marked APPROVED ANSWER is RDC's own reply to a customer question, written for customers. If it answers the user's question (the same question, or the same thing asked in other words), reply with that answer: pass on everything it says, including any reference, contact or advice, keeping facts, figures and wording as close as the conversation allows, translated into the reply language when needed. Do not restructure it into your own list or add material from other sources. Where it and any other source disagree, the approved answer is right.
 
 ## SAFETY GUARDRAILS
 - NEVER invent specific plant addresses, pricing, phone numbers, or project details not in your knowledge
@@ -139,7 +146,7 @@ Current conversation intent: ${intent}
 ${retrievalQuery ? `Internal English retrieval query used for source lookup: ${retrievalQuery}` : ""}
 
 ## KNOWLEDGE RETRIEVED FOR THIS QUERY
-${knowledgeSection || "No approved knowledge matched. Do not answer from memory."}
+${knowledgeSection || "No approved knowledge matched. Do not answer from memory."}${approvedSection}
 ${webSection}
 
 ## WHEN THE USER WANTS TO BUY, ORDER OR COMPLAIN
@@ -205,7 +212,8 @@ async function geminiResponse(request: AIRequest, model: string): Promise<string
     request.intent,
     knowledgeContext,
     request.webSearchResults,
-    request.retrievalQuery
+    request.retrievalQuery,
+    request.approvedAnswer
   );
 
   // Build conversation messages
@@ -266,7 +274,8 @@ async function openAIResponse(request: AIRequest, model: string): Promise<string
     request.intent,
     knowledgeContext,
     request.webSearchResults,
-    request.retrievalQuery
+    request.retrievalQuery,
+    request.approvedAnswer
   );
 
   const messages = [
@@ -348,6 +357,11 @@ export function withoutDiscontinued(text: string): string {
 // Main Entry Point
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Intents that show the "Chat with RDC Tara on WhatsApp" card. */
+export function suggestsTara(intent: Intent): boolean {
+  return ["commercial_intent", "pricing", "contact_sales", "ordering_process", "complaint_feedback"].includes(intent);
+}
+
 export async function generateAIResponse(request: AIRequest): Promise<AIResponse> {
   const startTime = Date.now();
   const provider = process.env.AI_PROVIDER || "google";
@@ -363,12 +377,7 @@ export async function generateAIResponse(request: AIRequest): Promise<AIResponse
   let usedMockMode = false;
 
   // Shows the "Chat with RDC Tara on WhatsApp" card in the chat window.
-  const suggestLeadCapture =
-    request.intent === "commercial_intent" ||
-    request.intent === "pricing" ||
-    request.intent === "contact_sales" ||
-    request.intent === "ordering_process" ||
-    request.intent === "complaint_feedback";
+  const suggestLeadCapture = suggestsTara(request.intent);
 
   if (useMock) {
     content = await mockResponse(request);
