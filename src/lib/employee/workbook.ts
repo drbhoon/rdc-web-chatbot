@@ -7,7 +7,27 @@ export interface EmployeeRecord {
 }
 let cache: {mtime: number; path: string; rows: EmployeeRecord[]} | undefined;
 export const employeeWorkbookPath = () => process.env.EMPLOYEE_EXCEL_PATH || path.join(process.cwd(), "private", "employees.xlsx");
+
+// On hr.rdcc.ai the portal's employee master (refreshed nightly from ZingHR and
+// Truein) replaces the Excel file. It has no qualification or department, so
+// those lines are simply left out of the reply.
+let masterCache: {at: number; rows: EmployeeRecord[]} | undefined;
+const MASTER_TTL_MS = 30 * 60 * 1000;
+async function loadFromMaster(url: string, key: string): Promise<EmployeeRecord[]> {
+  if (masterCache && Date.now() - masterCache.at < MASTER_TTL_MS) return masterCache.rows;
+  const res = await fetch(`${url.replace(/\/$/, "")}/api/master/employees`, {headers: {"x-master-key": key}, signal: AbortSignal.timeout(30_000), cache: "no-store"});
+  if (!res.ok) throw new Error(`The employee master returned ${res.status}`);
+  const body = await res.json() as {employees?: Array<{employee_name?: string; designation?: string | null; location?: string | null; city?: string | null}>};
+  const rows = (body.employees || []).filter(e => e.employee_name).map(e => ({
+    name: e.employee_name!.trim(), qualification: "", city: e.city || "", location: e.location || "", department: "", designation: e.designation || "",
+  }));
+  masterCache = {at: Date.now(), rows};
+  return rows;
+}
+
 export async function loadEmployees(): Promise<EmployeeRecord[]> {
+  const masterUrl = process.env.MASTER_API_URL, masterKey = process.env.MASTER_API_KEY;
+  if (masterUrl && masterKey) return loadFromMaster(masterUrl, masterKey);
   const filename = employeeWorkbookPath();
   const stat = await fs.stat(filename);
   if (cache?.mtime === stat.mtimeMs && cache.path === filename) return cache.rows;

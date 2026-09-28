@@ -194,7 +194,13 @@ model UnansweredQuestion {
   language String @default("en")
   reason String
   occurrences Int @default(1)
+  // pending = flagged by the bot and waiting; logged = collected by the daily
+  // sheet (answered by the bot, open to refinement); answered = refined by RDC.
   status String @default("pending")
+  // flagged (bot could not answer) | daily (every question, from the daily sheet)
+  source String @default("flagged")
+  // The bot's own latest answer, so reviewers see what customers were told.
+  botAnswer String?
   answer String?
   version Int @default(1)
   createdAt DateTime @default(now())

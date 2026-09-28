@@ -13,11 +13,11 @@ import {
 } from "@/lib/i18n/languagePreference";
 import { normalizeQueryForRetrieval } from "@/lib/i18n/queryNormalizer";
 import { classifyIntent } from "@/lib/intent/classifier";
-import { retrieveRelevantChunks } from "@/lib/knowledge/retrieval";
+import { retrieveRelevantChunks, APPROVED_CATEGORY, type RetrievedChunk } from "@/lib/knowledge/retrieval";
 import { generateAIResponse } from "@/lib/ai/aiService";
 import { performWebSearch, shouldUseWebSearch } from "@/lib/search/webSearch";
 import { handleEmployeeDirectoryMessage } from "@/lib/employee/directory";
-import { recordUnanswered } from "@/lib/knowledge/unanswered";
+import { approvedAnswerFor, recordUnanswered } from "@/lib/knowledge/unanswered";
 import { rateLimited, rateLimitedKey } from "@/lib/rateLimit";
 import { v4 as uuidv4 } from "uuid";
 
@@ -226,7 +226,13 @@ export async function POST(req: NextRequest) {
   }
 
   let retrievalFailed = false;
-  const chunks = await retrieveRelevantChunks(normalizedQuery.retrievalQuery, { topK: 12 }).catch(() => {
+  // A refined answer for exactly this question outranks everything retrieved.
+  const approved = await approvedAnswerFor(message).catch(() => null);
+  const exactApproved: RetrievedChunk[] = approved ? [{
+    id: "approved-exact", documentId: "approved-exact", title: approved.question, category: APPROVED_CATEGORY,
+    content: `Question: ${approved.question}\nApproved answer: ${approved.answer}`, score: 100, sourceType: "faq", similarityScore: 1,
+  }] : [];
+  const chunks = await retrieveRelevantChunks(normalizedQuery.retrievalQuery, { topK: 12 }).then((found) => [...exactApproved, ...found]).catch(() => {
     retrievalFailed = true;
     return [];
   });

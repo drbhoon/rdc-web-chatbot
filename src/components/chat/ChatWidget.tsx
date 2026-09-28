@@ -212,6 +212,12 @@ export default function ChatWidget() {
     setTimeout(() => inputRef.current?.focus(), 300);
   }, []);
 
+  // A link with ?open=1 (the TARA Online button on the HR portal) lands
+  // straight in the conversation instead of on the page behind it.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("open") === "1") handleOpen();
+  }, [handleOpen]);
+
   const handleClose = useCallback(() => {
     setState((prev) => ({ ...prev, isOpen: false }));
     stopSpeaking();

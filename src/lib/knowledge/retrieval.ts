@@ -16,7 +16,14 @@ export async function retrieveRelevantChunks(query: string, options: {topK?: num
     WHERE d."isActive" = true AND d.visibility = 'public' AND c.vector IS NOT NULL
       AND (${category}::text IS NULL OR d.category = ${category})
     ORDER BY c.vector <=> ${vectorLiteral(embedding)}::vector LIMIT ${limit}`;
-  return rows.filter(r => r.similarity >= 0.25).map(r => ({...r, score: Math.round(r.similarity * 100), similarityScore: r.similarity, retrievalMode: "vector"}));
+  const chunks = rows.filter(r => r.similarity >= 0.25).map(r => ({...r, score: Math.round(r.similarity * 100), similarityScore: r.similarity, retrievalMode: "vector" as const}));
+  return approvedFirst(chunks);
+}
+export const APPROVED_CATEGORY = "approved_answers";
+/** An answer RDC reviewed for a question close to this one goes ahead of any document. */
+export function approvedFirst(chunks: RetrievedChunk[]): RetrievedChunk[] {
+  const close = (c: RetrievedChunk) => c.category === APPROVED_CATEGORY && (c.similarityScore ?? 0) >= 0.5;
+  return [...chunks.filter(close), ...chunks.filter(c => !close(c))];
 }
 export async function getChunksByCategory(category: string, limit = 5): Promise<RetrievedChunk[]> {
   const rows = await prisma.knowledgeChunk.findMany({ where: {document: {category, isActive: true, visibility: "public"}}, include: {document: true}, take: limit });

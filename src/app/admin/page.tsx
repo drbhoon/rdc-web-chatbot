@@ -504,11 +504,32 @@ export default function AdminPage() {
   const [token, setToken] = useState<string | null>(() =>
     typeof window === "undefined" ? null : localStorage.getItem("rdc_admin_token")
   );
+  // On hr.rdcc.ai the portal sign-in is the admin sign-in (see /api/admin/me).
+  const [sso, setSso] = useState<"checking" | "on" | "off">("checking");
+
+  useEffect(() => {
+    fetch(withBase("/api/admin/me"))
+      .then(async (res) => {
+        if (!res.ok) return setSso("off");
+        const data = await res.json();
+        localStorage.setItem("rdc_admin_token", data.token);
+        setToken(data.token);
+        setSso("on");
+      })
+      .catch(() => setSso("off"));
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem("rdc_admin_token");
     setToken(null);
+    // Signing out of the portal is what signs out here; clearing the token
+    // alone would be undone on the next page load.
+    if (sso === "on") window.location.href = "/api/auth/logout";
   };
+
+  if (!token && sso === "checking") {
+    return <div className="min-h-screen flex items-center justify-center text-sm text-gray-500">Checking sign-in…</div>;
+  }
 
   if (!token) {
     return <AdminLogin onLogin={setToken} />;

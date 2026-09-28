@@ -2,13 +2,15 @@ import { requireAdmin } from "@/lib/admin/auth";
 import { prisma } from "@/lib/db";
 import { exportReview, parseReview } from "@/lib/knowledge/reviewWorkbook";
 import { embedTexts, vectorLiteral, EMBEDDING_MODEL } from "@/lib/knowledge/embeddings";
+import { istDate } from "@/lib/review/pairs";
 
 export async function GET(req: Request) {
   if (!requireAdmin(req)) return Response.json({error: "Unauthorized"}, {status: 401});
   const url = new URL(req.url);
   const rows = await prisma.unansweredQuestion.findMany({where: url.searchParams.get("all") === "true" ? {} : {status: "pending"}, orderBy: {lastAskedAt: "desc"}, take: 1000});
   if (url.searchParams.get("format") !== "xlsx") return Response.json({questions: rows});
-  return new Response(new Uint8Array(await exportReview(rows)), {headers: {"Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": 'attachment; filename="RDC-Unanswered-Questions.xlsx"', "Cache-Control": "no-store"}});
+  const sheetRows = rows.map(r => ({...r, askedOn: istDate(r.lastAskedAt)}));
+  return new Response(new Uint8Array(await exportReview(sheetRows)), {headers: {"Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": 'attachment; filename="TARA-Online-questions.xlsx"', "Cache-Control": "no-store"}});
 }
 
 export async function POST(req: Request) {

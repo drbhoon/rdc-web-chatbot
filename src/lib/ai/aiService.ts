@@ -9,6 +9,8 @@
  */
 
 import type { RetrievedChunk } from "@/lib/knowledge/retrieval";
+
+const APPROVED_CATEGORY = "approved_answers";
 import type { Intent } from "@/lib/intent/classifier";
 import { FACTS, factsOfRecord } from "@/lib/facts";
 
@@ -119,6 +121,9 @@ ${langInstruction}
 ## OTHER COMPANIES
 - Speak only about RDC. Do not compare RDC with named competitors or comment on other companies' products, prices, market share or reputation, even when the documents mention them. If asked, say politely that you can only speak for RDC, then share RDC's own strengths.
 
+## APPROVED ANSWERS
+- A source marked APPROVED ANSWER was written by RDC for a customer question. If it answers the user's question (the same question, or the same thing asked in other words), give that answer: keep its facts, figures and advice exactly, only adapting the wording to the conversation and translating it into the reply language. Where it and any other source disagree, the approved answer is right.
+
 ## SAFETY GUARDRAILS
 - NEVER invent specific plant addresses, pricing, phone numbers, or project details not in your knowledge
 - NEVER give structural/engineering design approvals — always say "our technical team can advise"
@@ -192,7 +197,7 @@ async function mockResponse(request: AIRequest): Promise<string> {
 
 async function geminiResponse(request: AIRequest, model: string): Promise<string> {
   const knowledgeContext = request.retrievedChunks
-    .map((c, i) => `[${i + 1}] ${c.title}: ${withoutDiscontinued(c.content)}`)
+    .map(formatSource)
     .join("\n\n");
 
   const systemPrompt = buildSystemPrompt(
@@ -253,7 +258,7 @@ async function geminiResponse(request: AIRequest, model: string): Promise<string
 
 async function openAIResponse(request: AIRequest, model: string): Promise<string> {
   const knowledgeContext = request.retrievedChunks
-    .map((c, i) => `[${i + 1}] ${c.title}: ${withoutDiscontinued(c.content)}`)
+    .map(formatSource)
     .join("\n\n");
 
   const systemPrompt = buildSystemPrompt(
@@ -315,6 +320,12 @@ export function keepBrandNamesInEnglish(text: string): string {
     .replace(/RDC\s+(तारा|टारा)/g, "RDC Tara")
     .replace(/RDC\s+(कंक्रीट|कांक्रीट)/g, "RDC Concrete")
     .replace(/(?:TARA|Tara|तारा|टारा)\s+(?:ऑनलाइन|ओनलाइन|Online)/g, "TARA Online");
+}
+
+/** One knowledge excerpt as the model sees it; RDC-reviewed answers are labelled as such. */
+export function formatSource(c: RetrievedChunk, i: number): string {
+  const label = c.category === APPROVED_CATEGORY ? "APPROVED ANSWER (written by RDC)" : c.title;
+  return `[${i + 1}] ${label}: ${withoutDiscontinued(c.content)}`;
 }
 
 const DISCONTINUED = /customer[\s-]*connect/i;
