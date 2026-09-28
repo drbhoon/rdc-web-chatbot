@@ -3,103 +3,266 @@
   "locations": [
     {
       "name": "Andhra Pradesh",
-      "plants": 2
+      "plants": 2,
+      "localities": [
+        "Vijayawada",
+        "Vizag"
+      ]
     },
     {
       "name": "Assam",
-      "plants": 2
+      "plants": 2,
+      "localities": [
+        "Guwahati 1",
+        "Guwahati 2"
+      ]
     },
     {
       "name": "Bengaluru",
-      "plants": 12
+      "plants": 12,
+      "localities": [
+        "Anjanapura",
+        "Bagalur",
+        "Budigere",
+        "Devenahalli",
+        "Doddaballapura",
+        "Hedge Nagar",
+        "Mysore Road",
+        "Sadahalli",
+        "Tumkur Road",
+        "Veerasandra",
+        "Whitefield",
+        "Yelahanka"
+      ]
     },
     {
       "name": "Bihar",
-      "plants": 1
+      "plants": 1,
+      "localities": [
+        "Patna Comm"
+      ]
     },
     {
       "name": "Chennai",
-      "plants": 6
+      "plants": 6,
+      "localities": [
+        "Madhavaram",
+        "Medavakkam",
+        "Oragadam",
+        "Poonamallee",
+        "Pudupakkam",
+        "Trisulam"
+      ]
     },
     {
       "name": "Chhattisgarh",
-      "plants": 2
+      "plants": 2,
+      "localities": [
+        "Durg",
+        "Raipur 1"
+      ]
     },
     {
       "name": "Delhi NCR",
-      "plants": 11
+      "plants": 11,
+      "localities": [
+        "Faridabad",
+        "Ghewra",
+        "Greater Noida 1",
+        "Greater Noida 2",
+        "Greater Noida 3",
+        "Greater Noida 4",
+        "Gurgaon",
+        "Gurgaon Badshahpur",
+        "Gurgaon Kherki",
+        "Gurgaon Manesar",
+        "Kharkhoda"
+      ]
     },
     {
       "name": "Goa",
-      "plants": 2
+      "plants": 2,
+      "localities": [
+        "Goa 1",
+        "Goa 2"
+      ]
     },
     {
       "name": "Gujarat",
-      "plants": 8
+      "plants": 8,
+      "localities": [
+        "Ahmedabad Gift City",
+        "Hazira Commercial",
+        "Mundra Commercial",
+        "Sanand",
+        "Surat 1",
+        "Surat 2",
+        "Vadodara - Dumad",
+        "Vapi"
+      ]
     },
     {
       "name": "Hyderabad",
-      "plants": 9
+      "plants": 9,
+      "localities": [
+        "Bachupally",
+        "Khanapur",
+        "Kollur",
+        "Medchal",
+        "Nacharam",
+        "Patancheru",
+        "Rajendra Nagar (Trading)",
+        "Tellapur",
+        "Tukkuguda"
+      ]
     },
     {
       "name": "Jammu & Kashmir",
-      "plants": 2
+      "plants": 2,
+      "localities": [
+        "Jammu",
+        "Kathua"
+      ]
     },
     {
       "name": "Jharkhand",
-      "plants": 2
+      "plants": 2,
+      "localities": [
+        "Jamshedpur",
+        "Ranchi"
+      ]
     },
     {
       "name": "Karnataka",
-      "plants": 1
+      "plants": 1,
+      "localities": [
+        "Mangalore"
+      ]
     },
     {
       "name": "Kerala",
-      "plants": 8
+      "plants": 8,
+      "localities": [
+        "Kochi 1 Edyar",
+        "Kochi 2 Amb",
+        "Kottayam",
+        "Kozikode",
+        "Thrissur 1",
+        "Trivandrum 1",
+        "Trivandrum 2",
+        "Wayanad"
+      ]
     },
     {
       "name": "Kolkata",
-      "plants": 5
+      "plants": 5,
+      "localities": [
+        "Hooghly",
+        "Howrah",
+        "Kalyani Bypass",
+        "New Town",
+        "Taratala"
+      ]
     },
     {
       "name": "Madhya Pradesh",
-      "plants": 5
+      "plants": 5,
+      "localities": [
+        "Bhopal 1",
+        "Bhopal 2",
+        "Indore",
+        "Indore 2",
+        "Jabalpur"
+      ]
     },
     {
       "name": "Maharashtra",
-      "plants": 3
+      "plants": 3,
+      "localities": [
+        "Chh. Sambhaji Nagar",
+        "Nagpur 1",
+        "Nagpur 2"
+      ]
     },
     {
       "name": "Mumbai",
-      "plants": 10
+      "plants": 10,
+      "localities": [
+        "Deonar",
+        "Kalyan",
+        "Kashimira",
+        "Khalapur",
+        "Mankoli",
+        "Pallava",
+        "Sakinaka",
+        "Taloja",
+        "Turbhe",
+        "Uran"
+      ]
     },
     {
       "name": "Odisha",
-      "plants": 2
+      "plants": 2,
+      "localities": [
+        "Bhubaneswar 2",
+        "Cuttack"
+      ]
     },
     {
       "name": "Pune",
-      "plants": 5
+      "plants": 5,
+      "localities": [
+        "Hadapsar",
+        "Hinjewadi",
+        "Jambe",
+        "Sinhgarh",
+        "TPL Metro"
+      ]
     },
     {
       "name": "Punjab",
-      "plants": 5
+      "plants": 5,
+      "localities": [
+        "Derabassi",
+        "Kurali",
+        "Ludhiana",
+        "Ludhiana 3",
+        "Mohali"
+      ]
     },
     {
       "name": "Rajasthan",
-      "plants": 1
+      "plants": 1,
+      "localities": [
+        "Jaipur"
+      ]
     },
     {
       "name": "Tamil Nadu",
-      "plants": 3
+      "plants": 3,
+      "localities": [
+        "Coimbatore 1",
+        "Hosur",
+        "Trichy"
+      ]
     },
     {
       "name": "Uttar Pradesh",
-      "plants": 4
+      "plants": 4,
+      "localities": [
+        "Ayodhya",
+        "Ghaziabad",
+        "Gorakhpur",
+        "Lucknow"
+      ]
     },
     {
       "name": "Uttarakhand",
-      "plants": 2
+      "plants": 2,
+      "localities": [
+        "Dehradun",
+        "Haridwar"
+      ]
     }
   ]
 }

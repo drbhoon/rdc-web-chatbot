@@ -127,7 +127,9 @@ def main(path: str) -> None:
     # The same place list goes into every answer's facts of record
     # (src/lib/facts.ts), so "where do you operate?" is answered from it even
     # when retrieval misses the overview, instead of from a guess.
-    places = [{"name": place, "plants": len(names)} for place, names in sorted(by_location.items())]
+    # Localities also let the employee directory tell a place ("Greater Noida")
+    # from a person's name typed on its own.
+    places = [{"name": place, "plants": len(names), "localities": sorted(names)} for place, names in sorted(by_location.items())]
     LOCATIONS_OUT.write_text(json.dumps({"asOf": FACTS["asOf"], "locations": places}, ensure_ascii=False, indent=2) + "\n",
                              encoding="utf-8", newline="\n")
     print(f"Wrote {len(places)} commercial plant locations to {LOCATIONS_OUT}")

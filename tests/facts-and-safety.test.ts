@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "fs";
 import { FACTS, PLANT_LOCATIONS, factsOfRecord } from "../src/lib/facts";
 import { rateLimitedKey } from "../src/lib/rateLimit";
-import { extractEmployeeName } from "../src/lib/employee/directory";
+import { bareEmployeeName, extractEmployeeName } from "../src/lib/employee/directory";
 import { keepBrandNamesInEnglish, withoutDiscontinued } from "../src/lib/ai/aiService";
 
 test("facts of record: the official website, numbers and plant count RDC gave", () => {
@@ -79,4 +79,20 @@ test("employee lookups start only from an explicit request for a person", () => 
   assert.equal(extractEmployeeName("411045"), null);
   // Company topics stay company topics.
   assert.equal(extractEmployeeName("Tell me about Vision 2030"), null);
+});
+
+test("a message that is just a name is a lookup; greetings, places and products are not", () => {
+  assert.equal(bareEmployeeName("Asha Example"), "Asha Example");
+  assert.equal(bareEmployeeName("asha example"), "asha example");
+  assert.equal(bareEmployeeName("Asha K. Example?"), "Asha K. Example");
+  for (const notAName of [
+    "Good morning", "Thank you", "Ready mix", "Navi Mumbai", "Greater Noida", "Mysore Road", "Tamil Nadu",
+    "What is RMC", "M25 grade", "411045", "RDC Tara", "Vision 2030", "Price list", "Hello there", "asha@rdc.in",
+    "Delhi NCR", "Tell me about the company and its plants in Pune please",
+  ]) assert.equal(bareEmployeeName(notAName), null, notAName);
+  // One word is too easily a city or a greeting — unless the chat is already verified.
+  assert.equal(bareEmployeeName("Rahul"), null);
+  assert.equal(bareEmployeeName("Rahul", true), "Rahul");
+  assert.equal(bareEmployeeName("Hello", true), null);
+  assert.equal(bareEmployeeName("Hadapsar", true), null);
 });

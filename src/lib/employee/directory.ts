@@ -2,6 +2,7 @@ import { loadEmployees } from "@/lib/employee/workbook";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
 import { prisma } from "@/lib/db";
+import { PLANT_LOCATIONS } from "@/lib/facts";
 
 const EMPLOYEE_LOOKUP_PATTERNS = [
   /\btell me about\s+([a-z][a-z .'-]{2,})/i,
@@ -260,6 +261,50 @@ export function extractEmployeeName(message: string): string | null {
     if (isLikelyEmployeeName(name) || isPossibleSingleEmployeeName(name)) return name;
   }
   return null;
+}
+
+// A message that is nothing but a name ("Asha Example") is a lookup too. The
+// check never consults the directory: real and made-up names get the same
+// verification reply, so typing names reveals nothing about who works at RDC.
+// These words and places make a short message something other than a name.
+const BARE_NOT_NAME_WORDS = new Set([
+  // greetings, replies, courtesy
+  "hi", "hii", "hello", "hey", "namaste", "namaskar", "thanks", "thank", "thx", "ok", "okay", "yes", "no", "sure",
+  "good", "morning", "afternoon", "evening", "night", "bye", "welcome", "please", "sorry", "great", "nice", "fine", "done",
+  // question and function words (English and Hinglish)
+  "what", "who", "where", "when", "why", "how", "which", "whom", "whose", "is", "are", "was", "can", "could", "would",
+  "will", "do", "does", "did", "and", "or", "to", "from", "with", "about", "tell", "show", "give", "need", "want", "know",
+  "kya", "kaun", "kahan", "kaise", "kab", "kyun", "kitna", "kitne", "hai", "hain", "ka", "ki", "ke", "me", "mein", "aur",
+  "hindi", "english",
+  // concrete, ordering and the assistant itself
+  "ready", "mix", "readymix", "concrete", "cement", "grade", "slab", "pump", "pumping", "boom", "quote", "quotation",
+  "cost", "supply", "site", "project", "plants", "location", "locations", "address", "email", "whatsapp", "tara",
+  "online", "saathi", "sales", "support", "complaint", "help", "service", "services", "quality", "test", "cube",
+  "strength", "aggregate", "sand", "admixture", "steel", "mixer", "transit", "truck", "booking", "book", "career", "careers", "job", "jobs",
+  // place words
+  "west", "east", "north", "south", "road", "nagar", "city", "town", "district", "state", "india", "pradesh", "bypass", "sector", "phase",
+  "नमस्ते", "नमस्कार", "धन्यवाद", "शुक्रिया", "हाँ", "हां", "नहीं", "ठीक", "क्या", "कौन", "कहाँ", "कहां", "कैसे",
+  "ऑर्डर", "प्राइस", "रेट", "प्लांट", "डिलीवरी", "कंक्रीट", "सीमेंट",
+]);
+// Whole place names: plant locations and localities, and cities people type.
+const PLACE_NAMES = new Set([
+  ...PLANT_LOCATIONS.flatMap((place) => [place.name, ...(place.localities || [])]).map((p) => normalizeName(p)),
+  "navi mumbai", "new delhi", "thane west", "greater noida", "tamil nadu", "west bengal", "jammu kashmir",
+]);
+
+/** Exported for tests: the name, when the whole message looks like one. */
+export function bareEmployeeName(message: string, allowSingleWord = false): string | null {
+  const name = cleanEmployeeName(message.trim());
+  if (!/^[\p{L}\p{M} .'-]+$/u.test(name)) return null; // digits, e-mails, sentences with commas
+  const normalized = normalizeName(name);
+  const tokens = normalized.split(" ").filter(Boolean);
+  if (tokens.length > 4 || tokens.length === 0 || (tokens.length === 1 && !allowSingleWord)) return null;
+  // Initials ("K. Ramesh") are fine, but not a message of initials alone.
+  if (!tokens.some((t) => t.length >= 3)) return null;
+  if (tokens.some((t) => BARE_NOT_NAME_WORDS.has(t) || NOT_NAME_WORDS.has(t))) return null;
+  if (PLACE_NAMES.has(normalized)) return null;
+  if (tokens.length === 1) return isPossibleSingleEmployeeName(name) ? name : null;
+  return isLikelyEmployeeName(name) ? name : null;
 }
 
 function extractRdcEmail(message: string): string | null {
@@ -615,15 +660,17 @@ export async function handleEmployeeDirectoryMessage(
     };
   }
 
-  // Only an explicit request ("tell me about …", "who is …", "employee …")
-  // starts a lookup, and it always asks for verification first. A bare name used
-  // to be checked against the directory BEFORE verification, and only real
-  // employees got the verification prompt — so anyone could learn who works at
-  // RDC by typing names.
-  const employeeName = extractEmployeeName(message);
+  // A lookup starts from an explicit request ("tell me about …", "who is …") or
+  // from a message that is just a name, and until this chat is verified it
+  // always asks for verification first, whether or not the name is real. (A
+  // bare name was once checked against the directory BEFORE verification, and
+  // only real employees got the prompt — so anyone could learn who works at
+  // RDC by typing names.) Once verified, a single first name is enough.
+  const activeAuth = await latestActiveVerifiedEmployeeAuth(sessionId);
+  const explicitName = extractEmployeeName(message);
+  const employeeName = explicitName || bareEmployeeName(message, Boolean(activeAuth));
   if (!employeeName) return { handled: false };
 
-  const activeAuth = await latestActiveVerifiedEmployeeAuth(sessionId);
   if (activeAuth) {
     const lookupCount = await employeeLookupCountForCode(activeAuth);
     if (lookupCount < MAX_EMPLOYEE_LOOKUPS_PER_CODE) {
@@ -652,10 +699,15 @@ export async function handleEmployeeDirectoryMessage(
     },
   });
 
+  // A bare "name" might be a place or product this list does not know:
+  // say how to ask something else instead.
+  const otherwise = explicitName ? "" : language === "hi"
+    ? ` अगर आप कुछ और पूछना चाहते थे, तो कृपया पूरा सवाल लिखें.`
+    : ` If you meant something else, please ask it as a full question.`;
   return {
     handled: true,
-    message: employeePrompt(employeeName, language),
+    message: employeePrompt(employeeName, language) + otherwise,
     eventType: "employee_lookup_requested",
-    metadata: { employeeName },
+    metadata: { employeeName, bareName: !explicitName },
   };
 }
