@@ -67,6 +67,14 @@ export class AvatarMotion {
   private nextBlinkAt = 1.2;
   private blinkStartedAt = -10;
   private secondBlinkAt = -1;
+  /** 1 for an ordinary blink; larger stretches it into a slow, soft blink. */
+  private blinkScale = 1;
+  private slowBlinkAt = -1;
+
+  // The understanding nod (acknowledge()): until when it owns the head, and
+  // the second, smaller nod it has queued.
+  private ackUntil = -1;
+  private queuedNod: { at: number; amp: number; length: number } | null = null;
 
   constructor(random: () => number = Math.random) {
     this.random = random;
@@ -101,6 +109,26 @@ export class AvatarMotion {
     if (this.t - this.blinkStartedAt > 0.8 && this.random() < 0.35) this.nextBlinkAt = this.t;
   }
 
+  /**
+   * The "I understand" nod of someone listening to a question: the head tips to
+   * one side and the chin dips in a slow nod, then a smaller second one, with a
+   * soft blink at the bottom of the first; about two seconds, then back. Modelled
+   * on a listening AI presenter (RDC's reference, 2026-10-10). Call it while the
+   * visitor is asking; calls during one already under way are ignored.
+   */
+  acknowledge(): void {
+    const t = this.t;
+    if (t < this.ackUntil - 0.5) return;
+    this.side = this.random() < 0.5 ? -1 : 1;
+    this.ackUntil = t + 2.3;
+    this.gesture = { tilt: this.side * this.between(2.6, 3.4), rise: 0.003, turn: 0 };
+    this.gestureEndsAt = t + 1.9;
+    this.nextGestureAt = this.ackUntil + this.between(1, 2.5);
+    this.startNod(this.between(0.006, 0.008), 0.95);
+    this.queuedNod = { at: t + 1.0, amp: this.between(0.0035, 0.005), length: 0.8 };
+    this.slowBlinkAt = t + 0.4;
+  }
+
   private pickGesture(mode: AvatarMode): void {
     const speaking = mode === "speaking";
     const roll = this.random();
@@ -131,8 +159,15 @@ export class AvatarMotion {
   }
 
   private blinkAmount(speaking: boolean): number {
-    if (this.t >= this.nextBlinkAt) {
+    if (this.slowBlinkAt > 0 && this.t >= this.slowBlinkAt) {
       this.blinkStartedAt = this.t;
+      this.blinkScale = 2.2;
+      this.slowBlinkAt = -1;
+      this.secondBlinkAt = -1;
+      this.nextBlinkAt = this.t + this.between(2.5, 5);
+    } else if (this.t >= this.nextBlinkAt) {
+      this.blinkStartedAt = this.t;
+      this.blinkScale = 1;
       this.secondBlinkAt = this.random() < 0.15 ? this.t + 0.26 : -1;
       this.nextBlinkAt = this.t + (speaking ? this.between(2.6, 5.8) : this.between(2.2, 5.4));
     }
@@ -140,8 +175,8 @@ export class AvatarMotion {
       this.blinkStartedAt = this.t;
       this.secondBlinkAt = -1;
     }
-    // 60 ms closing, 40 ms shut, 80 ms opening.
-    const since = this.t - this.blinkStartedAt;
+    // 60 ms closing, 40 ms shut, 80 ms opening (stretched for a slow blink).
+    const since = (this.t - this.blinkStartedAt) / this.blinkScale;
     if (since < 0.06) return since / 0.06;
     if (since < 0.1) return 1;
     if (since < 0.18) return 1 - (since - 0.1) / 0.08;
@@ -154,20 +189,29 @@ export class AvatarMotion {
     const t = this.t;
     const speaking = mode === "speaking";
 
+    const acknowledging = t < this.ackUntil;
     if (mode !== this.lastMode) {
-      if (mode === "listening") this.side = this.random() < 0.5 ? -1 : 1;
       this.lastMode = mode;
-      this.gesture = ZERO;
-      this.nextGestureAt = t + this.between(0.8, 2);
-      this.maybeBlinkWithMovement();
+      // A nod in progress finishes first (the question was just sent and the
+      // mode turned to "thinking"); the new mode takes over after it.
+      if (!acknowledging) {
+        if (mode === "listening") this.side = this.random() < 0.5 ? -1 : 1;
+        this.gesture = ZERO;
+        this.nextGestureAt = t + this.between(0.8, 2);
+        this.maybeBlinkWithMovement();
+      }
+    }
+    if (this.queuedNod && t >= this.queuedNod.at) {
+      this.startNod(this.queuedNod.amp, this.queuedNod.length);
+      this.queuedNod = null;
     }
 
     const blink = this.blinkAmount(speaking);
     if (reducedMotion) return { tilt: 0, rise: 0, turn: 0, nod: 0, breath: 0, sway: 0, blink };
 
-    if (t >= this.nextGestureAt) this.pickGesture(mode);
+    if (!acknowledging && t >= this.nextGestureAt) this.pickGesture(mode);
     const gesture = t < this.gestureEndsAt ? this.gesture : ZERO;
-    const base = this.modePose(mode);
+    const base = acknowledging ? ZERO : this.modePose(mode);
 
     // Loudness, smoothed; a loud syllable after a pause earns an emphasis nod.
     this.energy += (Math.max(0, Math.min(1, speechEnergy)) - this.energy) * (1 - Math.exp(-dt / 0.12));
@@ -177,7 +221,8 @@ export class AvatarMotion {
     }
     this.wasLoud = loud;
 
-    const omega = speaking ? 5 : 3.4;
+    // The understanding nod moves slower and softer than other gestures.
+    const omega = acknowledging ? 2.6 : speaking ? 5 : 3.4;
     const tilt = this.head.tilt.step(base.tilt + gesture.tilt, dt, omega);
     const rise = this.head.rise.step(base.rise + gesture.rise, dt, omega);
     const turn = this.head.turn.step(base.turn + gesture.turn, dt, omega);

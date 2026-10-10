@@ -62,6 +62,27 @@ test("reduced motion: the head keeps still, blinking stays", () => {
   assert.ok(poses.some((p) => p.blink > 0));
 });
 
+test("the understanding nod: head tips and dips twice with a slow blink, then settles", () => {
+  const motion = new AvatarMotion(seeded(11));
+  run("listening", 3, 0, false, motion);
+  motion.acknowledge();
+  // The question is sent at once: the mode turns to "thinking", the nod still finishes.
+  const poses = run("thinking", 3.5, 0, false, motion);
+  const firstTwo = poses.slice(0, 120);
+  assert.ok(Math.max(...firstTwo.map((p) => Math.abs(p.tilt))) > 2, "the head tips to one side");
+  const dip = firstTwo.map((p) => p.rise + p.nod);
+  assert.ok(Math.max(...dip) > 0.007, "the chin dips");
+  // Two separate dips: the head comes up between them.
+  const peaks = dip.filter((d, i) => i > 0 && i < dip.length - 1 && d > dip[i - 1] && d >= dip[i + 1] && d > 0.004);
+  assert.ok(peaks.length >= 2, `${peaks.length} dips`);
+  // A slow blink near the bottom of the first nod: closed for longer than an ordinary blink.
+  const closed = firstTwo.filter((p) => p.blink > 0.5).length / 60;
+  assert.ok(closed > 0.12, `eyes closed ${closed.toFixed(2)} s`);
+  // Repeated calls during the nod are ignored; after it the head is back near neutral.
+  motion.acknowledge();
+  assert.ok(Math.abs(poses.at(-1)!.nod) < 0.001);
+});
+
 test("mouth frames follow loudness only while speaking", () => {
   assert.deepEqual(mouthTarget("idle", 0.9), [1, 0, 0]);
   assert.deepEqual(mouthTarget("speaking", 0.1), [1, 0, 0]);

@@ -18,6 +18,8 @@ interface SaathiAvatarProps {
   caption?: string | null;
   /** How far she is through reading it aloud (0..1), or null when not speaking. */
   captionProgress?: number | null;
+  /** Each change asks for an understanding nod. */
+  nodSignal?: number;
 }
 
 /** Splits a reply into sentences, keeping the spaces so the pieces add back up. */
@@ -99,6 +101,7 @@ export default function SaathiAvatar({
   onLanguageChange,
   caption = null,
   captionProgress = null,
+  nodSignal = 0,
 }: SaathiAvatarProps) {
   const energy = mode === "speaking" ? Math.max(0, Math.min(1, speechEnergy)) : 0;
   const speakingFrame = energy < 0.18 ? "rest" : energy < 0.62 ? "soft" : "open";
@@ -112,7 +115,7 @@ export default function SaathiAvatar({
       <div className="saathi-avatar-stage" aria-hidden="true">
         <div className="saathi-avatar-halo" />
         <div className={`saathi-avatar-photo ${liveReady ? "is-live" : ""}`}>
-          <LiveAvatarCanvas mode={mode} speechEnergy={speechEnergy} className="saathi-live-canvas" onReady={setLiveReady} />
+          <LiveAvatarCanvas mode={mode} speechEnergy={speechEnergy} nodSignal={nodSignal} className="saathi-live-canvas" onReady={setLiveReady} />
           <Image
             src={withBase("/saathi-avatar-v2.png")}
             alt=""

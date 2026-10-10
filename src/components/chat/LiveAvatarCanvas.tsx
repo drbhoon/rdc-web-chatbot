@@ -141,16 +141,23 @@ export function mouthTarget(mode: AvatarMode, energy: number): [number, number, 
 interface Props {
   mode: AvatarMode;
   speechEnergy: number;
+  /** Each change asks for an understanding nod (the visitor is asking something). */
+  nodSignal?: number;
   className?: string;
   onReady: (ready: boolean) => void;
 }
 
-export default function LiveAvatarCanvas({ mode, speechEnergy, className, onReady }: Props) {
+export default function LiveAvatarCanvas({ mode, speechEnergy, nodSignal = 0, className, onReady }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const live = useRef({ mode, speechEnergy });
   live.current = { mode, speechEnergy };
   const onReadyRef = useRef(onReady);
   onReadyRef.current = onReady;
+  const motionRef = useRef<AvatarMotion | null>(null);
+
+  useEffect(() => {
+    if (nodSignal > 0) motionRef.current?.acknowledge();
+  }, [nodSignal]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -161,6 +168,7 @@ export default function LiveAvatarCanvas({ mode, speechEnergy, className, onRead
     let frame = 0;
     let cancelled = false;
     const motion = new AvatarMotion();
+    motionRef.current = motion;
     const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)");
     const mouth = [1, 0, 0];
 

@@ -48,6 +48,8 @@ const QUICK_PROMPTS = [
   "Contact sales",
 ];
 
+const VOICE_MUTED_KEY = "tara_voice_muted";
+
 const INITIAL_GREETING = "Welcome to RDC Concrete! 🙏\n\nI'm **TARA Online**, your digital assistant. I can help you with information about our products, plant locations, ordering process, and more.\n\nHow can I help you today?";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -144,7 +146,39 @@ export default function ChatWidget() {
 
   const [inputValue, setInputValue] = useState("");
   const [isListening, setIsListening] = useState(false);
-  const [isTTSEnabled, setIsTTSEnabled] = useState(false);
+  // Voice is on from the start (RDC, 2026-10-10), unless this visitor turned it
+  // off before; read after mounting so the server-rendered page matches.
+  const [isTTSEnabled, setIsTTSEnabled] = useState(true);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(VOICE_MUTED_KEY) === "1") setIsTTSEnabled(false);
+    } catch { /* storage unavailable: keep voice on */ }
+  }, []);
+  const toggleVoice = useCallback((on: boolean) => {
+    setIsTTSEnabled(on);
+    try {
+      if (on) localStorage.removeItem(VOICE_MUTED_KEY);
+      else localStorage.setItem(VOICE_MUTED_KEY, "1");
+    } catch { /* not remembered; fine */ }
+  }, []);
+
+  // TARA's understanding nod while the visitor is asking: as they speak into
+  // the mic, when they pause typing, and when they send. At most every 3.5 s,
+  // so it reads as listening, not bobbing.
+  const [nodSignal, setNodSignal] = useState(0);
+  const lastNodAt = useRef(0);
+  const typingPause = useRef<number | null>(null);
+  const nod = useCallback((force = false) => {
+    const now = Date.now();
+    if (!force && now - lastNodAt.current < 3500) return;
+    lastNodAt.current = now;
+    setNodSignal((n) => n + 1);
+  }, []);
+  const nodAfterTypingPause = useCallback((text: string) => {
+    if (typingPause.current) window.clearTimeout(typingPause.current);
+    if (text.trim().length < 6) return;
+    typingPause.current = window.setTimeout(() => nod(), 900);
+  }, [nod]);
   const [hasUnread, setHasUnread] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [avatarMode, setAvatarMode] = useState<AvatarMode>("idle");
@@ -270,6 +304,7 @@ export default function ChatWidget() {
       setAvatarMode("thinking");
       setSpeechEnergy(0);
       setSpokenProgress(null);
+      nod(true);
 
       setInputValue("");
 
@@ -357,7 +392,7 @@ export default function ChatWidget() {
         setSpeechEnergy(0);
       }
     },
-    [state.isLoading, state.sessionId, state.detectedLanguage, state.isOpen, isTTSEnabled, stopAvatarSpeech]
+    [state.isLoading, state.sessionId, state.detectedLanguage, state.isOpen, isTTSEnabled, stopAvatarSpeech, nod]
   );
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -398,6 +433,7 @@ export default function ChatWidget() {
       state.detectedLanguage,
       (result) => {
         setInputValue(result.transcript);
+        if (!result.isFinal) nod();
         if (result.isFinal && result.transcript.trim()) {
           sendMessage(result.transcript.trim());
           setIsListening(false);
@@ -414,7 +450,7 @@ export default function ChatWidget() {
       }
     );
     stopListeningRef.current = stop;
-  }, [isListening, state.detectedLanguage, sendMessage]);
+  }, [isListening, state.detectedLanguage, sendMessage, nod]);
 
   const langName = getLanguageName(state.detectedLanguage);
   const showVoice = process.env.NEXT_PUBLIC_ENABLE_VOICE_UI !== "false";
@@ -464,7 +500,7 @@ export default function ChatWidget() {
               <div className="flex items-center gap-1">
                 {/* TTS Toggle */}
                 <button
-                  onClick={() => { setIsTTSEnabled(!isTTSEnabled); stopSpeaking(); stopAvatarSpeech(); }}
+                  onClick={() => { toggleVoice(!isTTSEnabled); stopSpeaking(); stopAvatarSpeech(); }}
                   className="w-8 h-8 rounded-full flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-all"
                   title={isTTSEnabled ? "Mute voice" : "Enable voice"}
                 >
@@ -490,6 +526,7 @@ export default function ChatWidget() {
               // WhatsApp card fills the message strip below.
               caption={state.isLoading ? null : [...state.messages].reverse().find((m) => m.role === "assistant")?.content ?? null}
               captionProgress={spokenProgress}
+              nodSignal={nodSignal}
             />
 
             {/* Messages */}
@@ -581,7 +618,7 @@ export default function ChatWidget() {
                   ref={inputRef}
                   type="text"
                   value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
+                  onChange={(e) => { setInputValue(e.target.value); nodAfterTypingPause(e.target.value); }}
                   placeholder={
                     isListening
                       ? "Listening..."
