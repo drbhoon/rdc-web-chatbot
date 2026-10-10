@@ -11,6 +11,8 @@ export interface LoggedMessage {
   language: string;
   intent: string | null;
   createdAt: Date;
+  /** The asker's signed-in address, where sign-in is required. */
+  askerEmail?: string | null;
 }
 
 export interface QuestionGroup {
@@ -21,6 +23,8 @@ export interface QuestionGroup {
   /** The bot's answer the LAST time this was asked that day. */
   botAnswer: string;
   lastAskedAt: Date;
+  /** Who asked it (signed-in addresses), with how many times each. */
+  askedBy: Record<string, number>;
 }
 
 // Replies that are not answers to review: employee lookups stay private (the
@@ -48,12 +52,14 @@ export function pairQuestions(messages: LoggedMessage[]): QuestionGroup[] {
 
       const fingerprint = questionFingerprint(asked.content);
       const seen = groups.get(fingerprint);
+      const asker = asked.askerEmail || "";
       if (!seen) {
         groups.set(fingerprint, {
           fingerprint, question: asked.content.trim(), language: asked.language, timesAsked: 1,
-          botAnswer: reply.content, lastAskedAt: asked.createdAt,
+          botAnswer: reply.content, lastAskedAt: asked.createdAt, askedBy: asker ? {[asker]: 1} : {},
         });
       } else {
+        if (asker) seen.askedBy[asker] = (seen.askedBy[asker] || 0) + 1;
         seen.timesAsked += 1;
         if (asked.createdAt >= seen.lastAskedAt) {
           seen.lastAskedAt = asked.createdAt;

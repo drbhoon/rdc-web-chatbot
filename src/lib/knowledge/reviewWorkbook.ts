@@ -17,9 +17,11 @@ export interface ReviewRow {
   version: number;
   askedOn?: string;
   botAnswer?: string | null;
+  /** Signed-in addresses of those who asked, e.g. "a@rdc.in (2), b@rdc.in". */
+  askedBy?: string;
 }
 
-const HEADERS = ["ID", "Asked on", "Language", "Question", "Times asked", "TARA's answer", "Refined answer", "Publish", "Version"];
+const HEADERS = ["ID", "Asked on", "Language", "Question", "Times asked", "Asked by", "TARA's answer", "Refined answer", "Publish", "Version"];
 const INSTRUCTIONS =
   "Write a better answer in 'Refined answer' where TARA's answer needs it, and set Publish to YES. " +
   "Upload this file in TARA Online Admin > Knowledge. Keep ID and Version unchanged. " +
@@ -29,22 +31,22 @@ export async function exportReview(rows: ReviewRow[]) {
   const book = new ExcelJS.Workbook();
   const sheet = book.addWorksheet("Questions", {views: [{state: "frozen", ySplit: 2}]});
   sheet.addRow([INSTRUCTIONS]);
-  sheet.mergeCells("A1:I1");
+  sheet.mergeCells("A1:J1");
   sheet.getRow(1).height = 48;
   sheet.getCell("A1").alignment = {wrapText: true, vertical: "middle"};
   sheet.addRow(HEADERS);
-  sheet.columns = [{width: 38}, {width: 12}, {width: 10}, {width: 55}, {width: 11}, {width: 75}, {width: 75}, {width: 10}, {width: 9}];
+  sheet.columns = [{width: 38}, {width: 12}, {width: 10}, {width: 55}, {width: 11}, {width: 30}, {width: 75}, {width: 75}, {width: 10}, {width: 9}];
   for (const item of rows) {
-    sheet.addRow([item.id, item.askedOn || "", item.language, item.question, item.occurrences, item.botAnswer || "", item.answer || "", "", item.version]);
+    sheet.addRow([item.id, item.askedOn || "", item.language, item.question, item.occurrences, item.askedBy || "", item.botAnswer || "", item.answer || "", "", item.version]);
   }
   sheet.getRow(2).font = {bold: true, color: {argb: "FFFFFFFF"}};
   sheet.getRow(2).fill = {type: "pattern", pattern: "solid", fgColor: {argb: "FF17365D"}};
-  sheet.autoFilter = "A2:I2";
+  sheet.autoFilter = "A2:J2";
   for (let n = 3; n <= sheet.rowCount; n++) {
     sheet.getRow(n).alignment = {wrapText: true, vertical: "top"};
     sheet.getRow(n).height = 90;
-    sheet.getCell(`G${n}`).fill = {type: "pattern", pattern: "solid", fgColor: {argb: "FFFFF2CC"}};
-    sheet.getCell(`H${n}`).dataValidation = {type: "list", allowBlank: true, formulae: ['"YES,NO"']};
+    sheet.getCell(`H${n}`).fill = {type: "pattern", pattern: "solid", fgColor: {argb: "FFFFF2CC"}};
+    sheet.getCell(`I${n}`).dataValidation = {type: "list", allowBlank: true, formulae: ['"YES,NO"']};
   }
   return book.xlsx.writeBuffer();
 }

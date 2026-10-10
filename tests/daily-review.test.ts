@@ -3,10 +3,11 @@ import assert from "node:assert/strict";
 import { pairQuestions, istDate, istHour, istDayWindow, previousDay, type LoggedMessage } from "../src/lib/review/pairs";
 import { approvedFirst, type RetrievedChunk } from "../src/lib/knowledge/retrieval";
 import { formatSource } from "../src/lib/ai/aiService";
+import { formatAskers } from "../src/lib/review/dailyReview";
 
 const at = (hhmm: string) => new Date(`2026-09-27T${hhmm}:00+05:30`);
-const msg = (sessionId: string, role: string, content: string, time: string, intent: string | null = null): LoggedMessage =>
-  ({sessionId, role, content, language: "en", intent, createdAt: at(time)});
+const msg = (sessionId: string, role: string, content: string, time: string, intent: string | null = null, askerEmail: string | null = null): LoggedMessage =>
+  ({sessionId, role, content, language: "en", intent, createdAt: at(time), askerEmail});
 
 test("each question is paired with TARA's reply in the same chat, repeats merged", () => {
   const groups = pairQuestions([
@@ -17,6 +18,18 @@ test("each question is paired with TARA's reply in the same chat, repeats merged
   assert.equal(groups.length, 2);
   assert.deepEqual([groups[0].question, groups[0].timesAsked, groups[0].botAnswer], ["How do I order?", 2, "Message RDC Tara on WhatsApp."]);
   assert.equal(groups[1].question, "Price of M25?");
+});
+
+test("the sheet records who asked each question, with counts", () => {
+  const groups = pairQuestions([
+    msg("a", "user", "Price of M25?", "10:00", null, "asha@rdc.in"), msg("a", "assistant", "It depends.", "10:00"),
+    msg("a", "user", "price of m25?", "10:05", null, "asha@rdc.in"), msg("a", "assistant", "It depends.", "10:05"),
+    msg("b", "user", "Price of M25?", "11:00", null, "ravi@rdc.in"), msg("b", "assistant", "It depends.", "11:00"),
+    msg("c", "user", "Price of M25?", "12:00"), msg("c", "assistant", "It depends.", "12:00"),
+  ]);
+  assert.equal(groups[0].timesAsked, 4);
+  assert.deepEqual(groups[0].askedBy, {"asha@rdc.in": 2, "ravi@rdc.in": 1});
+  assert.equal(formatAskers(groups[0].askedBy), "asha@rdc.in (2), ravi@rdc.in");
 });
 
 test("employee lookups and language switches stay out of the e-mailed sheet", () => {

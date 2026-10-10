@@ -284,6 +284,11 @@ export default function ChatWidget() {
           }),
         });
 
+        // Sign-in expired (where it is required): reloading leads to the sign-in page.
+        if (res.status === 401) {
+          window.location.reload();
+          return;
+        }
         const data = await res.json();
 
         if (!res.ok) throw new Error(data.error || "Chat request failed");

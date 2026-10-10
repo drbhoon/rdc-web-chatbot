@@ -517,7 +517,9 @@ function employeePrompt(name: string, language: string): string {
 export async function handleEmployeeDirectoryMessage(
   message: string,
   sessionId: string,
-  language = "en"
+  language = "en",
+  /** The visitor's Google-verified address, where sign-in is required. */
+  signedInEmail?: string,
 ): Promise<EmployeeDirectoryResult> {
   const otpMatch = message.match(OTP_PATTERN);
   // Six digits is also an Indian PIN code, and "which area?" is the bot's own
@@ -689,6 +691,22 @@ export async function handleEmployeeDirectoryMessage(
         },
       };
     }
+  }
+
+  // Signed in with Google as an @rdc.in address (hr.rdcc.ai): that is already
+  // the verification the e-mailed code exists to provide, so look up at once.
+  // It opens the same 10-lookup allowance a code would, for a working day.
+  if (!activeAuth && signedInEmail && EMAIL_PATTERN.test(signedInEmail)) {
+    await prisma.employeeOtp.create({
+      data: {sessionId, employeeName, email: signedInEmail, verifiedAt: new Date(), expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000)},
+    });
+    const employee = await findEmployee(employeeName);
+    return {
+      handled: true,
+      message: formatEmployee(employee, language),
+      eventType: "employee_lookup_completed",
+      metadata: {employeeName, requesterEmail: signedInEmail, found: Boolean(employee), verifiedBySignIn: true, remainingLookups: MAX_EMPLOYEE_LOOKUPS_PER_CODE - 1},
+    };
   }
 
   await prisma.employeeOtp.create({

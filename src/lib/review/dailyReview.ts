@@ -21,18 +21,20 @@ export function reviewRecipients(): string[] {
  * the sheet rows. Safe to run twice for the same day: existing questions only
  * get TARA's latest answer; nothing is counted twice.
  */
-export async function collectDay(day: string): Promise<ReviewRow[]> {
+export async function collectDay(day: string): Promise<Array<ReviewRow & {askers: Record<string, number>}>> {
   const {from, to} = istDayWindow(day);
   const messages = await prisma.chatMessage.findMany({
     where: {createdAt: {gte: from, lt: new Date(to.getTime() + REPLY_GRACE_MS)}, role: {in: ["user", "assistant"]}},
     orderBy: [{sessionId: "asc"}, {createdAt: "asc"}],
-    select: {sessionId: true, role: true, content: true, language: true, intent: true, createdAt: true},
+    select: {sessionId: true, role: true, content: true, language: true, intent: true, createdAt: true, session: {select: {userEmail: true}}},
   });
   // Questions asked after midnight belong to the next day's sheet; only their
   // replies may run past it.
-  const groups = pairQuestions(messages.filter((m) => m.role !== "user" || m.createdAt < to));
+  const groups = pairQuestions(messages
+    .filter((m) => m.role !== "user" || m.createdAt < to)
+    .map(({session, ...m}) => ({...m, askerEmail: session.userEmail})));
 
-  const rows: ReviewRow[] = [];
+  const rows: Array<ReviewRow & {askers: Record<string, number>}> = [];
   for (const g of groups) {
     const saved = await prisma.unansweredQuestion.upsert({
       where: {fingerprint: g.fingerprint},
@@ -45,9 +47,18 @@ export async function collectDay(day: string): Promise<ReviewRow[]> {
     rows.push({
       id: saved.id, askedOn: day, question: saved.question, language: saved.language, occurrences: g.timesAsked,
       botAnswer: g.botAnswer, answer: saved.status === "answered" ? saved.answer : null, version: saved.version,
+      askedBy: formatAskers(g.askedBy), askers: g.askedBy,
     });
   }
   return rows;
+}
+
+/** "a@rdc.in (2), b@rdc.in" — most frequent first. */
+export function formatAskers(askedBy: Record<string, number>): string {
+  return Object.entries(askedBy)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([email, n]) => (n > 1 ? `${email} (${n})` : email))
+    .join(", ");
 }
 
 export function mailConfigured(): boolean {
@@ -70,13 +81,20 @@ function prettyDay(day: string): string {
 /** Builds the e-mail for one day. Separate from sending so it can be checked without SMTP. */
 export async function buildDailyMail(day: string, recipients: string[]) {
   const rows = await collectDay(day);
+  // Who asked, across the whole day: one line per person with their count.
+  const people: Record<string, number> = {};
+  for (const row of rows) for (const [email, n] of Object.entries(row.askers)) people[email] = (people[email] || 0) + n;
+  const askers = Object.entries(people).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   const adminUrl = `${(process.env.APP_URL || "").replace(/\/$/, "")}/admin`;
   const asked = rows.reduce((n, r) => n + r.occurrences, 0);
   const subject = `TARA Online: ${rows.length} question${rows.length === 1 ? "" : "s"} for review, ${prettyDay(day)}`;
   const text = rows.length
     ? [
         `Visitors asked TARA Online ${asked} question${asked === 1 ? "" : "s"} on ${prettyDay(day)} (${rows.length} different). The attached sheet lists each with TARA's answer.`,
-        "",
+        ...(askers.length
+          ? ["", `Asked by ${askers.length} ${askers.length === 1 ? "person" : "people"} (the sheet's 'Asked by' column shows who asked what):`,
+              ...askers.map(([email, n]) => `  ${email}: ${n} question${n === 1 ? "" : "s"}`), ""]
+          : [""]),
         "Where an answer can be better, write it in the yellow 'Refined answer' column and set Publish to YES.",
         `Then upload the sheet in TARA Online Admin > Knowledge${process.env.APP_URL ? ` (${adminUrl})` : ""}. TARA uses a published answer from then on.`,
         "",

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimited } from "@/lib/rateLimit";
 import { speechInput, speechInstructions } from "@/lib/voice/speechInstructions";
+import { loginFromRequest, loginRequired } from "@/lib/auth/rdcLogin";
 
 const LANGUAGE_NAMES: Record<string, string> = {
   en: "Indian English",
@@ -19,6 +20,10 @@ export async function POST(request: NextRequest) {
   // Each call is paid speech synthesis, and the endpoint is public.
   if (rateLimited(request, "tts", 60)) {
     return NextResponse.json({ error: "Please try again in one minute." }, { status: 429 });
+  }
+  // Paid speech for signed-in visitors only, where sign-in is required.
+  if (loginRequired() && !loginFromRequest(request)) {
+    return NextResponse.json({ error: "Please sign in with your company Google account." }, { status: 401 });
   }
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) {

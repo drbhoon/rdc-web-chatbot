@@ -19,6 +19,7 @@ import { performWebSearch, shouldUseWebSearch } from "@/lib/search/webSearch";
 import { handleEmployeeDirectoryMessage } from "@/lib/employee/directory";
 import { approvedAnswerFor, recordUnanswered } from "@/lib/knowledge/unanswered";
 import { rateLimited, rateLimitedKey } from "@/lib/rateLimit";
+import { loginFromRequest, loginRequired } from "@/lib/auth/rdcLogin";
 import { v4 as uuidv4 } from "uuid";
 
 export interface ChatRequest {
@@ -49,6 +50,10 @@ export async function POST(req: NextRequest) {
   // Per address the ceiling is generous (an office or a mobile network shares
   // one IP); the per-conversation limit below is the real guard.
   if (rateLimited(req, "chat", 120)) return NextResponse.json({error: "Please try again in one minute."}, {status: 429});
+  // Who is asking, where sign-in is required (src/proxy.ts is the front door;
+  // this is checked again here because the chat is what matters).
+  const login = loginFromRequest(req);
+  if (loginRequired() && !login) return NextResponse.json({error: "Please sign in with your company Google account."}, {status: 401});
   const startTime = Date.now();
 
   let body: ChatRequest;
@@ -82,6 +87,7 @@ export async function POST(req: NextRequest) {
         id: sessionId,
         sourcePage: req.headers.get("referer") || undefined,
         userAgent: req.headers.get("user-agent") || undefined,
+        userEmail: login?.email,
       },
     });
 
@@ -93,6 +99,11 @@ export async function POST(req: NextRequest) {
         language: "en",
       },
     });
+  }
+
+  // A chat started before signing in (or on another tab) takes the address now.
+  if (login && session.userEmail !== login.email) {
+    session = await prisma.chatSession.update({ where: { id: sessionId! }, data: { userEmail: login.email } });
   }
 
   // ── 2. Language Detection ──────────────────────────────────────────────────
@@ -187,7 +198,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ── 6. Retrieve Relevant Knowledge ────────────────────────────────────────
-  const employeeResult = await handleEmployeeDirectoryMessage(message, sessionId!, detectedLanguage);
+  const employeeResult = await handleEmployeeDirectoryMessage(message, sessionId!, detectedLanguage, login?.email);
   if (employeeResult.handled) {
     const processingMs = Date.now() - startTime;
     await prisma.chatMessage.create({

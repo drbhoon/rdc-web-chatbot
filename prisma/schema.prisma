@@ -22,6 +22,8 @@ model ChatSession {
   sourcePage    String?
   userAgent     String?
   ipAddress     String?
+  // The visitor's verified Google address where sign-in is required (hr.rdcc.ai).
+  userEmail     String?
   leadCaptured  Boolean       @default(false)
   messages      ChatMessage[]
   leads         Lead[]

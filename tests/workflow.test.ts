@@ -5,16 +5,17 @@ import { exportReview, parseReview } from "../src/lib/knowledge/reviewWorkbook";
 import { issueAdminToken, requireAdmin } from "../src/lib/admin/auth";
 
 test("Excel export preserves questions as text and requires explicit publication", async () => {
-  const buffer = await exportReview([{id: "q1", question: '=HYPERLINK("https://example.com")', language: "en", occurrences: 2, answer: null, version: 1, askedOn: "2026-09-27", botAnswer: "TARA's reply"}]);
+  const buffer = await exportReview([{id: "q1", question: '=HYPERLINK("https://example.com")', language: "en", occurrences: 2, answer: null, version: 1, askedOn: "2026-09-27", botAnswer: "TARA's reply", askedBy: "asha@rdc.in (2)"}]);
   const book = new ExcelJS.Workbook(); await book.xlsx.load(buffer as never);
   const sheet = book.getWorksheet("Questions")!;
   assert.equal(sheet.getCell("D3").type, ExcelJS.ValueType.String);
-  assert.equal(sheet.getCell("F3").text, "TARA's reply");
+  assert.equal(sheet.getCell("F3").text, "asha@rdc.in (2)");
+  assert.equal(sheet.getCell("G3").text, "TARA's reply");
   await assert.rejects(parseReview(buffer as unknown as ArrayBuffer), /at least one/);
-  sheet.getCell("G3").value = "Approved factual answer"; sheet.getCell("H3").value = "YES";
+  sheet.getCell("H3").value = "Approved factual answer"; sheet.getCell("I3").value = "YES";
   const data = await book.xlsx.writeBuffer();
   assert.deepEqual(await parseReview(data as unknown as ArrayBuffer), [{id: "q1", answer: "Approved factual answer", version: 1}]);
-  sheet.getCell("G3").value = {formula: "1+1", result: 2};
+  sheet.getCell("H3").value = {formula: "1+1", result: 2};
   await assert.rejects(parseReview(await book.xlsx.writeBuffer() as unknown as ArrayBuffer), /plain text/);
 });
 
