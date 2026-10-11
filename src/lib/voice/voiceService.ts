@@ -1,8 +1,23 @@
 import { withBase } from "@/lib/basePath";
 /**
- * Voice service for RDC Saathi.
- * Speech recognition uses the browser API; speech output prefers server-generated
- * OpenAI audio and falls back to an installed browser voice.
+ * Voice service for TARA Online.
+ *
+ * Listening: the browser's speech recognition.
+ *
+ * Speaking: RDC's voice (OpenAI speech, /api/voice/tts), falling back to an
+ * installed browser voice. A reply is spoken in pieces as it is written, each
+ * piece fetched while the one before plays, so TARA starts talking a second
+ * or two after a question instead of after the whole answer (RDC, 2026-10-11).
+ *
+ * Why she sometimes stayed silent before, and what changed:
+ * - Each reply's audio was routed through a new Web Audio context (for the lip
+ *   movement). A context the browser keeps suspended plays SILENCE, which
+ *   iPhones and some desktop browsers do. The audio now plays straight from
+ *   one <audio> element; the lip movement reads the decoded sound instead.
+ * - That element is unlocked by the visitor's own tap or Enter key
+ *   (unlockAudio), so later replies may play; if a browser still refuses, the
+ *   caller is told (onBlocked) and can offer a "tap to hear" button.
+ * - A piece the server cannot voice is spoken by the browser voice instead.
  */
 
 export interface SpeechRecognitionResult {
@@ -11,45 +26,33 @@ export interface SpeechRecognitionResult {
   isFinal: boolean;
 }
 
-export interface TTSOptions {
-  text: string;
+export interface SpeakerOptions {
   language: string;
-  rate?: number;
-  pitch?: number;
-  volume?: number;
+  /** The first sound of this reply. */
   onStart?: () => void;
+  /** Everything spoken, or stopped. */
   onEnd?: () => void;
+  /** Loudness 0..1 for the lips, many times a second. */
   onEnergy?: (energy: number) => void;
-  /** How far through the spoken text the voice is, 0..1, several times a second. */
-  onProgress?: (fraction: number) => void;
-  onBoundary?: (event: { charIndex: number; charLength?: number; name?: string }) => void;
+  /** Characters of the pushed (readable) text spoken so far. */
+  onSpokenChars?: (chars: number) => void;
+  /** The browser would not play without a tap: call resume() from a click. */
+  onBlocked?: (resume: () => void) => void;
+  /** Stop after about this many characters (a long reply is not read in full). */
+  maxChars?: number;
+}
+
+export interface TTSOptions extends SpeakerOptions {
+  text: string;
 }
 
 const LANGUAGE_TAGS: Record<string, string> = {
-  en: "en-IN",
-  hi: "hi-IN",
-  mr: "mr-IN",
-  ta: "ta-IN",
-  te: "te-IN",
-  kn: "kn-IN",
-  ml: "ml-IN",
-  gu: "gu-IN",
-  pa: "pa-IN",
-  bn: "bn-IN",
+  en: "en-IN", hi: "hi-IN", mr: "mr-IN", ta: "ta-IN", te: "te-IN",
+  kn: "kn-IN", ml: "ml-IN", gu: "gu-IN", pa: "pa-IN", bn: "bn-IN",
 };
-
-let activeAudio: HTMLAudioElement | null = null;
-let activeAudioUrl: string | null = null;
-let activeAudioContext: AudioContext | null = null;
-let activeAnimationFrame: number | null = null;
-let activeRequest: AbortController | null = null;
-let fallbackEnergyTimer: number | null = null;
-let progressTimer: number | null = null;
 
 // "R D C", so the voice spells it out instead of reading a word.
 const forSpeech = (text: string) => text.replace(/\bRDC\b/g, "R D C");
-// Roughly how fast the voice speaks, for progress before the audio's length is known.
-const CHARS_PER_SECOND = 14;
 
 export function isSpeechRecognitionSupported(): boolean {
   if (typeof window === "undefined") return false;
@@ -125,245 +128,293 @@ export function spokenExcerpt(text: string, maxLength = 560): string {
   return `${clipped.slice(0, lastSpace > 0 ? lastSpace : maxLength).trim()}.`;
 }
 
-function releaseGeneratedAudio(): void {
-  if (progressTimer !== null) {
-    window.clearInterval(progressTimer);
-    progressTimer = null;
+/**
+ * Splits text that is still arriving into speakable pieces: whole sentences,
+ * at least `min` characters (a short first piece, so the voice starts soon).
+ * Returns the pieces ready now and the remainder to keep waiting on.
+ */
+export function takePieces(buffer: string, min: number): { pieces: string[]; rest: string } {
+  const pieces: string[] = [];
+  let rest = buffer;
+  for (;;) {
+    // Only where a space or line break follows: text still arriving may go on
+    // ("Rs." then "5,000", "3." then "5 lakh"). The final flush takes the rest.
+    const ends = [...rest.matchAll(/[.!?।](?=\s)|\n/g)].map((m) => (m.index ?? 0) + 1);
+    const cut = ends.find((end) => rest.slice(0, end).trim().length >= min);
+    if (!cut) break;
+    const piece = rest.slice(0, cut).trim();
+    if (piece) pieces.push(piece);
+    rest = rest.slice(cut);
+    min = Math.max(min, 140); // later pieces can be longer: they are fetched while one plays
   }
-  if (activeAnimationFrame !== null) {
-    window.cancelAnimationFrame(activeAnimationFrame);
-    activeAnimationFrame = null;
-  }
-  if (activeAudio) {
-    activeAudio.pause();
-    activeAudio.src = "";
-    activeAudio = null;
-  }
-  if (activeAudioContext) {
-    void activeAudioContext.close();
-    activeAudioContext = null;
-  }
-  if (activeAudioUrl) {
-    URL.revokeObjectURL(activeAudioUrl);
-    activeAudioUrl = null;
-  }
+  return { pieces, rest };
 }
 
-function startEnergyTracking(
-  audio: HTMLAudioElement,
-  context: AudioContext,
-  onEnergy?: (energy: number) => void
-): void {
-  const analyser = context.createAnalyser();
-  analyser.fftSize = 256;
-  analyser.smoothingTimeConstant = 0.82;
-  const source = context.createMediaElementSource(audio);
-  source.connect(analyser);
-  analyser.connect(context.destination);
-  const samples = new Uint8Array(analyser.frequencyBinCount);
+// ── The one audio element ─────────────────────────────────────────────────────
 
-  const update = () => {
-    analyser.getByteFrequencyData(samples);
-    let total = 0;
-    for (let i = 2; i < samples.length; i += 1) total += samples[i];
-    const average = total / Math.max(1, samples.length - 2);
-    onEnergy?.(Math.min(1, Math.max(0.08, average / 72)));
-    activeAnimationFrame = window.requestAnimationFrame(update);
-  };
-  update();
+let sharedAudio: HTMLAudioElement | null = null;
+let activeSpeaker: Speaker | null = null;
+
+// A tenth of a second of silence (8 kHz, 8-bit WAV), played to unlock audio.
+function silentWav(): string {
+  const samples = 800;
+  const bytes = new Uint8Array(44 + samples);
+  const view = new DataView(bytes.buffer);
+  const write = (at: number, text: string) => [...text].forEach((c, i) => view.setUint8(at + i, c.charCodeAt(0)));
+  write(0, "RIFF"); view.setUint32(4, 36 + samples, true); write(8, "WAVE"); write(12, "fmt ");
+  view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+  view.setUint32(24, 8000, true); view.setUint32(28, 8000, true); view.setUint16(32, 1, true); view.setUint16(34, 8, true);
+  write(36, "data"); view.setUint32(40, samples, true); bytes.fill(128, 44);
+  let binary = "";
+  bytes.forEach((b) => (binary += String.fromCharCode(b)));
+  return `data:audio/wav;base64,${btoa(binary)}`;
 }
 
-async function speakGeneratedAudio(options: TTSOptions): Promise<boolean> {
-  activeRequest = new AbortController();
-  const response = await fetch(withBase("/api/voice/tts"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text: forSpeech(spokenExcerpt(options.text)), language: options.language }),
-    signal: activeRequest.signal,
-  });
-  if (!response.ok) throw new Error(`Natural voice request failed: ${response.status}`);
-
-  const canStream =
-    response.body &&
-    typeof MediaSource !== "undefined" &&
-    MediaSource.isTypeSupported("audio/mpeg");
-
-  if (!canStream) {
-    const blob = await response.blob();
-    activeAudioUrl = URL.createObjectURL(blob);
-    return startAudioElement(new Audio(activeAudioUrl), options);
+function audioElement(): HTMLAudioElement {
+  if (!sharedAudio) {
+    sharedAudio = new Audio();
+    sharedAudio.preload = "auto";
+    sharedAudio.setAttribute("playsinline", "");
   }
-
-  const mediaSource = new MediaSource();
-  activeAudioUrl = URL.createObjectURL(mediaSource);
-  const audio = new Audio(activeAudioUrl);
-  const streamReady = new Promise<void>((resolve, reject) => {
-    mediaSource.addEventListener("sourceopen", async () => {
-      try {
-        const sourceBuffer = mediaSource.addSourceBuffer("audio/mpeg");
-        const reader = response.body!.getReader();
-        const queue: ArrayBuffer[] = [];
-        let streamEnded = false;
-
-        const appendNext = () => {
-          if (sourceBuffer.updating) return;
-          const chunk = queue.shift();
-          if (chunk) {
-            sourceBuffer.appendBuffer(chunk);
-          } else if (streamEnded && mediaSource.readyState === "open") {
-            mediaSource.endOfStream();
-          }
-        };
-
-        sourceBuffer.addEventListener("updateend", appendNext);
-        resolve();
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) {
-            streamEnded = true;
-            appendNext();
-            break;
-          }
-          queue.push(value.slice().buffer);
-          appendNext();
-        }
-      } catch (error) {
-        reject(error);
-      }
-    }, { once: true });
-  });
-
-  await streamReady;
-  return startAudioElement(audio, options);
+  return sharedAudio;
 }
 
-async function startAudioElement(audio: HTMLAudioElement, options: TTSOptions): Promise<boolean> {
-  activeAudio = audio;
-  audio.volume = options.volume ?? 1;
+/**
+ * Call from the visitor's own click or key press (send, Enter, mic, speaker
+ * button). Browsers only let a page play sound it has been given permission
+ * for by a gesture; once this element has played inside one, later replies can
+ * play on it.
+ */
+export function unlockAudio(): void {
+  if (typeof window === "undefined") return;
+  const audio = audioElement();
+  if (audio.dataset.unlocked) return;
+  audio.src = silentWav();
+  audio.play().then(() => { audio.dataset.unlocked = "1"; }).catch(() => { /* not this time */ });
+  // The browser voice (fallback) needs the same nudge on some phones.
+  if ("speechSynthesis" in window) window.speechSynthesis.resume();
+}
 
-  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  const context = AudioContextClass ? new AudioContextClass() : null;
-  activeAudioContext = context;
-  let started = false;
-
-  audio.onplaying = () => {
-    if (started) return;
-    started = true;
-    options.onStart?.();
-    if (options.onProgress) {
-      // A streamed reply has no known length until it has all arrived; until
-      // then, estimate it from the text.
-      const estimate = spokenExcerpt(options.text).length / CHARS_PER_SECOND;
-      progressTimer = window.setInterval(() => {
-        const total = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : estimate;
-        options.onProgress?.(Math.min(1, audio.currentTime / total));
-      }, 120);
+/** Loudness every 25 ms of decoded audio, for the lips. Null if it cannot be decoded. */
+async function loudnessEnvelope(data: ArrayBuffer): Promise<Float32Array | null> {
+  try {
+    const OfflineContext = window.OfflineAudioContext || (window as unknown as { webkitOfflineAudioContext?: typeof OfflineAudioContext }).webkitOfflineAudioContext;
+    if (!OfflineContext) return null;
+    const decoded = await new OfflineContext(1, 1, 22050).decodeAudioData(data.slice(0));
+    const samples = decoded.getChannelData(0);
+    const step = Math.max(1, Math.round(decoded.sampleRate * 0.025));
+    const out = new Float32Array(Math.ceil(samples.length / step));
+    let peak = 0.0001;
+    for (let i = 0; i < out.length; i++) {
+      let sum = 0;
+      const end = Math.min(samples.length, (i + 1) * step);
+      for (let j = i * step; j < end; j++) sum += samples[j] * samples[j];
+      out[i] = Math.sqrt(sum / Math.max(1, end - i * step));
+      peak = Math.max(peak, out[i]);
     }
-    if (context) {
-      void context.resume();
-      startEnergyTracking(audio, context, options.onEnergy);
-    }
-  };
-  audio.onended = () => {
-    activeRequest = null;
-    options.onEnergy?.(0);
-    releaseGeneratedAudio();
-    options.onEnd?.();
-  };
-  audio.onerror = () => {
-    activeRequest = null;
-    options.onEnergy?.(0);
-    releaseGeneratedAudio();
-    options.onEnd?.();
-  };
-
-  await audio.play();
-  return true;
+    for (let i = 0; i < out.length; i++) out[i] = Math.min(1, out[i] / (peak * 0.7));
+    return out;
+  } catch {
+    return null;
+  }
 }
 
-function speakWithBrowserVoice(options: TTSOptions): boolean {
-  if (!("speechSynthesis" in window)) return false;
+interface Clip { text: string; url: string | null; envelope: Float32Array | null }
 
-  const spoken = forSpeech(spokenExcerpt(options.text));
-  const utterance = new SpeechSynthesisUtterance(spoken);
-  const targetLang = LANGUAGE_TAGS[options.language] || LANGUAGE_TAGS.en;
-  utterance.lang = targetLang;
-  utterance.rate = options.rate ?? 0.94;
-  utterance.pitch = options.pitch ?? 1.08;
-  utterance.volume = options.volume ?? 1;
+/**
+ * Speaks one reply. push() text as it arrives, finish() when it is complete,
+ * stop() to cut it off. Starting a new speaker stops the previous one.
+ */
+export class Speaker {
+  private buffer = "";
+  private queued: Array<{ text: string; clip: Promise<Clip> }> = [];
+  private finished = false;
+  private stopped = false;
+  private playing = false;
+  private started = false;
+  private spokenChars = 0;
+  private budget: number;
+  private timer: number | null = null;
+  private readonly useServerVoice = process.env.NEXT_PUBLIC_USE_AI_TTS !== "false";
 
-  const voices = window.speechSynthesis.getVoices();
-  const languageVoices = voices.filter((voice) => voice.lang.replace("_", "-").startsWith(options.language));
-  const femaleHints = /female|woman|zira|heera|kalpana|veena|ravi|google.*female|microsoft.*female/i;
-  const bestVoice =
-    languageVoices.find((voice) => femaleHints.test(voice.name)) ||
-    languageVoices.find((voice) => voice.lang.replace("_", "-") === targetLang) ||
-    languageVoices[0];
-  if (bestVoice) utterance.voice = bestVoice;
+  constructor(private readonly options: SpeakerOptions) {
+    activeSpeaker?.stop();
+    // One voice at a time: remember this one so a new reply can stop it.
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    activeSpeaker = this;
+    this.budget = options.maxChars ?? 560;
+  }
 
-  utterance.onstart = () => {
-    options.onStart?.();
-    fallbackEnergyTimer = window.setInterval(() => {
-      options.onEnergy?.(0.22 + Math.random() * 0.7);
-    }, 105);
-  };
-  utterance.onboundary = (event) => {
-    options.onBoundary?.({ charIndex: event.charIndex, charLength: event.charLength, name: event.name });
-    options.onProgress?.(Math.min(1, event.charIndex / Math.max(1, spoken.length)));
-  };
-  const finish = () => {
-    if (fallbackEnergyTimer !== null) {
-      window.clearInterval(fallbackEnergyTimer);
-      fallbackEnergyTimer = null;
+  push(text: string): void {
+    if (this.stopped || this.budget <= 0) return;
+    this.buffer += text;
+    this.enqueue(false);
+  }
+
+  finish(): void {
+    this.finished = true;
+    this.enqueue(true);
+    if (!this.playing && this.queued.length === 0) this.end();
+  }
+
+  stop(): void {
+    if (this.stopped) return;
+    this.stopped = true;
+    this.queued = [];
+    if (this.timer !== null) window.clearInterval(this.timer);
+    if (sharedAudio && activeSpeaker === this) sharedAudio.pause();
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    this.options.onEnergy?.(0);
+    if (activeSpeaker === this) activeSpeaker = null;
+  }
+
+  private enqueue(all: boolean): void {
+    const { pieces, rest } = takePieces(this.buffer, this.started || this.queued.length ? 140 : 40);
+    this.buffer = rest;
+    if (all && rest.trim()) {
+      pieces.push(rest.trim());
+      this.buffer = "";
     }
-    options.onEnergy?.(0);
-    options.onEnd?.();
-  };
-  utterance.onend = finish;
-  utterance.onerror = finish;
-  window.speechSynthesis.speak(utterance);
-  return true;
-}
+    for (const raw of pieces) {
+      const text = readableText(raw);
+      if (!text || this.budget <= 0) continue;
+      this.budget -= text.length;
+      this.queued.push({ text, clip: this.fetchClip(text) });
+    }
+    if (!this.playing) void this.playNext();
+  }
 
-export async function speakText(options: TTSOptions): Promise<boolean> {
-  if (!isTTSSupported() || process.env.NEXT_PUBLIC_ENABLE_TTS !== "true") return false;
-  stopSpeaking();
-
-  if (process.env.NEXT_PUBLIC_USE_AI_TTS !== "false") {
+  private async fetchClip(text: string): Promise<Clip> {
+    if (!this.useServerVoice) return { text, url: null, envelope: null };
     try {
-      return await speakGeneratedAudio(options);
+      const res = await fetch(withBase("/api/voice/tts"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: forSpeech(text), language: this.options.language }),
+      });
+      if (!res.ok) throw new Error(`voice ${res.status}`);
+      const data = await res.arrayBuffer();
+      const envelope = await loudnessEnvelope(data);
+      return { text, url: URL.createObjectURL(new Blob([data], { type: "audio/mpeg" })), envelope };
     } catch (error) {
-      if ((error as Error).name !== "AbortError") {
-        console.warn("Natural voice unavailable; using browser voice.", error);
-      }
-      releaseGeneratedAudio();
+      console.warn("RDC voice unavailable for this piece; using the browser voice.", error);
+      return { text, url: null, envelope: null };
     }
   }
 
-  return speakWithBrowserVoice(options);
+  private async playNext(): Promise<void> {
+    if (this.stopped) return;
+    const next = this.queued.shift();
+    if (!next) {
+      this.playing = false;
+      if (this.finished) this.end();
+      return;
+    }
+    this.playing = true;
+    const clip = await next.clip;
+    if (this.stopped) return;
+    const spokenBefore = this.spokenChars;
+    const ok = clip.url ? await this.playClip(clip, spokenBefore) : await this.speakWithBrowser(clip.text, spokenBefore);
+    if (clip.url) URL.revokeObjectURL(clip.url);
+    if (!ok || this.stopped) return;
+    this.spokenChars = spokenBefore + clip.text.length;
+    this.options.onSpokenChars?.(this.spokenChars);
+    void this.playNext();
+  }
+
+  private begin(): void {
+    if (this.started) return;
+    this.started = true;
+    this.options.onStart?.();
+  }
+
+  private playClip(clip: Clip, spokenBefore: number): Promise<boolean> {
+    const audio = audioElement();
+    return new Promise((resolve) => {
+      const done = (ok: boolean) => {
+        if (this.timer !== null) window.clearInterval(this.timer);
+        this.timer = null;
+        audio.onended = null;
+        audio.onerror = null;
+        this.options.onEnergy?.(0);
+        resolve(ok);
+      };
+      audio.onended = () => done(true);
+      audio.onerror = () => done(true); // skip a broken piece rather than stall
+      audio.src = clip.url!;
+      const tick = () => {
+        const duration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : clip.text.length / 14;
+        const at = audio.currentTime;
+        this.options.onSpokenChars?.(spokenBefore + Math.min(1, at / duration) * clip.text.length);
+        const env = clip.envelope;
+        // Real loudness when the audio could be decoded; a lively guess otherwise.
+        this.options.onEnergy?.(env ? env[Math.min(env.length - 1, Math.floor(at / 0.025))] : 0.25 + Math.random() * 0.6);
+      };
+      const start = () => {
+        this.begin();
+        this.timer = window.setInterval(tick, 40);
+      };
+      audio.play().then(start).catch((error: Error) => {
+        if (error?.name !== "NotAllowedError" || !this.options.onBlocked) return done(true);
+        // The browser wants a tap first: hand the caller a way to resume.
+        this.options.onBlocked(() => {
+          audio.dataset.unlocked = "1";
+          audio.play().then(start).catch(() => done(true));
+        });
+      });
+    });
+  }
+
+  private speakWithBrowser(text: string, spokenBefore: number): Promise<boolean> {
+    if (!("speechSynthesis" in window)) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      const utterance = new SpeechSynthesisUtterance(forSpeech(text));
+      const targetLang = LANGUAGE_TAGS[this.options.language] || LANGUAGE_TAGS.en;
+      utterance.lang = targetLang;
+      utterance.rate = 0.94;
+      utterance.pitch = 1.08;
+      const voices = window.speechSynthesis.getVoices().filter((v) => v.lang.replace("_", "-").startsWith(this.options.language));
+      const voice = voices.find((v) => /female|woman|zira|heera|kalpana|veena/i.test(v.name)) || voices.find((v) => v.lang.replace("_", "-") === targetLang) || voices[0];
+      if (voice) utterance.voice = voice;
+      utterance.onstart = () => {
+        this.begin();
+        this.timer = window.setInterval(() => this.options.onEnergy?.(0.22 + Math.random() * 0.7), 105);
+      };
+      utterance.onboundary = (event) => this.options.onSpokenChars?.(spokenBefore + Math.min(text.length, event.charIndex));
+      const finish = () => {
+        if (this.timer !== null) window.clearInterval(this.timer);
+        this.timer = null;
+        this.options.onEnergy?.(0);
+        resolve(true);
+      };
+      utterance.onend = finish;
+      utterance.onerror = finish;
+      window.speechSynthesis.speak(utterance);
+    });
+  }
+
+  private end(): void {
+    if (this.stopped) return;
+    this.stopped = true;
+    if (activeSpeaker === this) activeSpeaker = null;
+    this.options.onEnergy?.(0);
+    this.options.onEnd?.();
+  }
+}
+
+/** Speaks a whole reply at once (replies that did not stream). */
+export function speakText(options: TTSOptions): boolean {
+  if (!isTTSSupported() || process.env.NEXT_PUBLIC_ENABLE_TTS !== "true") return false;
+  const speaker = new Speaker(options);
+  speaker.push(options.text);
+  speaker.finish();
+  return true;
 }
 
 export function stopSpeaking(): void {
-  if (progressTimer !== null) {
-    window.clearInterval(progressTimer);
-    progressTimer = null;
-  }
-  activeRequest?.abort();
-  activeRequest = null;
-  releaseGeneratedAudio();
-  if (fallbackEnergyTimer !== null) {
-    window.clearInterval(fallbackEnergyTimer);
-    fallbackEnergyTimer = null;
-  }
-  if (typeof window !== "undefined" && "speechSynthesis" in window) {
-    window.speechSynthesis.cancel();
-  }
-}
-
-declare global {
-  interface Window {
-    webkitAudioContext?: typeof AudioContext;
-  }
+  activeSpeaker?.stop();
+  activeSpeaker = null;
+  if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
 }
 
 interface SpeechRecognitionEvent {

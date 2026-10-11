@@ -19,6 +19,8 @@ export interface AvatarPose {
   rise: number;
   turn: number;
   nod: number;
+  /** Forward pitch of the head (a real nod), fraction of image height at eye level. */
+  pitch: number;
   breath: number;
   sway: number;
   blink: number;
@@ -34,7 +36,11 @@ const ZERO: HeadPose = { tilt: 0, rise: 0, turn: 0 };
 
 // How far each gesture may go. A real head seldom tilts more than a few
 // degrees in conversation; more than this reads as a cartoon.
-export const LIMITS = { tilt: 5, rise: 0.02, turn: 0.012, nod: 0.01 };
+export const LIMITS = { tilt: 5, rise: 0.02, turn: 0.012, nod: 0.01, pitch: 0.02 };
+
+// The understanding nod: one slow forward nod, eased in and out.
+const ACK_SECONDS = 1.7;
+const ACK_PITCH = 0.015;
 
 class Spring {
   value = 0;
@@ -71,10 +77,9 @@ export class AvatarMotion {
   private blinkScale = 1;
   private slowBlinkAt = -1;
 
-  // The understanding nod (acknowledge()): until when it owns the head, and
-  // the second, smaller nod it has queued.
+  // The understanding nod (acknowledge()): when it started, and until when it owns the head.
   private ackUntil = -1;
-  private queuedNod: { at: number; amp: number; length: number } | null = null;
+  private ackStartedAt = -10;
 
   constructor(random: () => number = Math.random) {
     this.random = random;
@@ -118,15 +123,25 @@ export class AvatarMotion {
    */
   acknowledge(): void {
     const t = this.t;
-    if (t < this.ackUntil - 0.5) return;
+    if (t < this.ackUntil - 0.4) return;
     this.side = this.random() < 0.5 ? -1 : 1;
-    this.ackUntil = t + 2.3;
-    this.gesture = { tilt: this.side * this.between(2.6, 3.4), rise: 0.003, turn: 0 };
-    this.gestureEndsAt = t + 1.9;
+    this.ackStartedAt = t;
+    this.ackUntil = t + ACK_SECONDS + 0.3;
+    // A gentle lean to one side under the nod; the nod itself is a pitch, not
+    // the head sliding down (which is what made the first version look odd).
+    this.gesture = { tilt: this.side * this.between(1.6, 2.2), rise: 0, turn: 0 };
+    this.gestureEndsAt = t + ACK_SECONDS;
     this.nextGestureAt = this.ackUntil + this.between(1, 2.5);
-    this.startNod(this.between(0.006, 0.008), 0.95);
-    this.queuedNod = { at: t + 1.0, amp: this.between(0.0035, 0.005), length: 0.8 };
-    this.slowBlinkAt = t + 0.4;
+    // One soft, slow blink at the bottom of the nod. (Half-lowered lids were
+    // tried: blending half of the closed-eye photo leaves ghosted eyes.)
+    this.slowBlinkAt = t + ACK_SECONDS * 0.4;
+  }
+
+  /** 0..1: how far into the understanding nod the head is (smooth in and out). */
+  private ackDepth(): number {
+    const since = this.t - this.ackStartedAt;
+    if (since < 0 || since > ACK_SECONDS) return 0;
+    return Math.sin((Math.PI * since) / ACK_SECONDS) ** 2;
   }
 
   private pickGesture(mode: AvatarMode): void {
@@ -201,13 +216,9 @@ export class AvatarMotion {
         this.maybeBlinkWithMovement();
       }
     }
-    if (this.queuedNod && t >= this.queuedNod.at) {
-      this.startNod(this.queuedNod.amp, this.queuedNod.length);
-      this.queuedNod = null;
-    }
 
     const blink = this.blinkAmount(speaking);
-    if (reducedMotion) return { tilt: 0, rise: 0, turn: 0, nod: 0, breath: 0, sway: 0, blink };
+    if (reducedMotion) return { tilt: 0, rise: 0, turn: 0, nod: 0, pitch: 0, breath: 0, sway: 0, blink };
 
     if (!acknowledging && t >= this.nextGestureAt) this.pickGesture(mode);
     const gesture = t < this.gestureEndsAt ? this.gesture : ZERO;
@@ -243,6 +254,7 @@ export class AvatarMotion {
       rise: clamp(rise + microRise, LIMITS.rise),
       turn: clamp(turn + microTurn, LIMITS.turn),
       nod: clamp(nod, LIMITS.nod),
+      pitch: clamp(ACK_PITCH * this.ackDepth(), LIMITS.pitch),
       breath: Math.sin((2 * Math.PI * t) / breathPeriod),
       sway: 0.35 * Math.sin(t * 0.19 + 0.7),
       blink,

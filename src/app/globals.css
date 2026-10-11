@@ -502,6 +502,18 @@ body {
   color: #0f172a;
 }
 
+/* Shown only when the browser would not play TARA's voice without a tap. */
+.saathi-tap-to-hear {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #ea580c;
+  color: #ffffff;
+  font-weight: 600;
+}
+
 .saathi-caption .is-ahead {
   color: #94a3b8;
 }

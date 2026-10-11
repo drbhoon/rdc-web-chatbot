@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { rateLimited } from "@/lib/rateLimit";
+import { rateLimited, rateLimitedKey } from "@/lib/rateLimit";
 import { speechInput, speechInstructions } from "@/lib/voice/speechInstructions";
 import { loginFromRequest, loginRequired } from "@/lib/auth/rdcLogin";
 
@@ -18,12 +18,15 @@ const LANGUAGE_NAMES: Record<string, string> = {
 
 export async function POST(request: NextRequest) {
   // Each call is paid speech synthesis, and the endpoint is public.
-  if (rateLimited(request, "tts", 60)) {
-    return NextResponse.json({ error: "Please try again in one minute." }, { status: 429 });
-  }
   // Paid speech for signed-in visitors only, where sign-in is required.
-  if (loginRequired() && !loginFromRequest(request)) {
+  const login = loginFromRequest(request);
+  if (loginRequired() && !login) {
     return NextResponse.json({ error: "Please sign in with your company Google account." }, { status: 401 });
+  }
+  // A reply is spoken in a few pieces, and an office shares one IP: count a
+  // signed-in visitor by their address. A refusal here meant a silent TARA.
+  if (login ? rateLimitedKey(`tts-user:${login.email}`, 120) : rateLimited(request, "tts", 240)) {
+    return NextResponse.json({ error: "Please try again in one minute." }, { status: 429 });
   }
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) {

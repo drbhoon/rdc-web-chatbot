@@ -11,10 +11,10 @@ import {
   isOnlyLanguageSwitch,
   languageSwitchAcknowledgement,
 } from "@/lib/i18n/languagePreference";
-import { normalizeQueryForRetrieval } from "@/lib/i18n/queryNormalizer";
+import { normalizeQueryForRetrieval, type NormalizedQuery } from "@/lib/i18n/queryNormalizer";
 import { classifyIntent } from "@/lib/intent/classifier";
 import { retrieveRelevantChunks, APPROVED_CATEGORY, type RetrievedChunk } from "@/lib/knowledge/retrieval";
-import { generateAIResponse, suggestsTara } from "@/lib/ai/aiService";
+import { generateAIResponse, suggestsTara, type ReplyEvents } from "@/lib/ai/aiService";
 import { performWebSearch, shouldUseWebSearch } from "@/lib/search/webSearch";
 import { handleEmployeeDirectoryMessage } from "@/lib/employee/directory";
 import { approvedAnswerFor, recordUnanswered } from "@/lib/knowledge/unanswered";
@@ -26,10 +26,14 @@ export interface ChatRequest {
   message: string;
   sessionId?: string | null;
   language?: string; // Override detected language
+  /** Ask for the answer as a stream (NDJSON) so voice and text start early. */
+  stream?: boolean;
 }
 
 export interface ChatResponse {
   message: string;
+  /** What TARA says aloud, when it differs from reading the message (a summary of a list or address). */
+  speech?: string | null;
   sessionId: string;
   detectedLanguage: string;
   intent: string;
@@ -49,11 +53,15 @@ const SUPPORTED_LANGUAGE_OVERRIDES = new Set([
 export async function POST(req: NextRequest) {
   // Per address the ceiling is generous (an office or a mobile network shares
   // one IP); the per-conversation limit below is the real guard.
-  if (rateLimited(req, "chat", 120)) return NextResponse.json({error: "Please try again in one minute."}, {status: 429});
   // Who is asking, where sign-in is required (src/proxy.ts is the front door;
   // this is checked again here because the chat is what matters).
   const login = loginFromRequest(req);
   if (loginRequired() && !login) return NextResponse.json({error: "Please sign in with your company Google account."}, {status: 401});
+  // A whole office shares one internet address, so a signed-in visitor is
+  // counted by their own address; others by IP, with a generous ceiling.
+  if (login ? rateLimitedKey(`chat-user:${login.email}`, 60) : rateLimited(req, "chat", 120)) {
+    return NextResponse.json({error: "Please try again in one minute."}, {status: 429});
+  }
   const startTime = Date.now();
 
   let body: ChatRequest;
@@ -132,7 +140,11 @@ export async function POST(req: NextRequest) {
 
   // ── 3. Intent Classification ───────────────────────────────────────────────
   const classification = classifyIntent(message);
-  const normalizedQuery = await normalizeQueryForRetrieval(message, detectedLanguage);
+  // An OpenAI call for Hindi and Hinglish (about a second): start it now and
+  // let the database work below run alongside it.
+  const normalizedQueryPending = normalizeQueryForRetrieval(message, detectedLanguage).catch(
+    (): NormalizedQuery => ({ originalMessage: message, retrievalQuery: message, usedOpenAI: false, provider: "none" }),
+  );
 
   // ── 4. Get Conversation History ────────────────────────────────────────────
   const recentMessages = await prisma.chatMessage.findMany({
@@ -238,14 +250,17 @@ export async function POST(req: NextRequest) {
 
   let retrievalFailed = false;
   // A refined answer for exactly this question outranks everything retrieved.
-  const approved = await approvedAnswerFor(message).catch(() => null);
+  const [normalizedQuery, approved] = await Promise.all([
+    normalizedQueryPending,
+    approvedAnswerFor(message).catch(() => null),
+  ]);
   const exactApproved: RetrievedChunk[] = approved ? [{
     id: "approved-exact", documentId: "approved-exact", title: approved.question, category: APPROVED_CATEGORY,
     content: `Question: ${approved.question}\nApproved answer: ${approved.answer}`, score: 100, sourceType: "faq", similarityScore: 1,
   }] : [];
   // Asked in the language it was refined in: RDC's words, exactly, no model.
   const verbatim = Boolean(approved && approved.language === detectedLanguage);
-  const chunks = verbatim ? exactApproved : await retrieveRelevantChunks(normalizedQuery.retrievalQuery, { topK: 12 }).then((found) => [...exactApproved, ...found]).catch(() => {
+  const chunks = verbatim ? exactApproved : await retrieveRelevantChunks(normalizedQuery.retrievalQuery, { topK: 8 }).then((found) => [...exactApproved, ...found]).catch(() => {
     retrievalFailed = true;
     return [];
   });
@@ -264,6 +279,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ── 8. Generate AI Response ────────────────────────────────────────────────
+  const answer = async (events?: ReplyEvents): Promise<ChatResponse> => {
   const aiResult = verbatim ? {
     content: approved!.answer, confidence: 1, usedMockMode: false, suggestLeadCapture: suggestsTara(classification.intent), unanswered: false, provider: "approved",
   } : retrievalFailed ? {
@@ -279,7 +295,7 @@ export async function POST(req: NextRequest) {
     webSearchResults: webSearchContext,
     sessionId: sessionId!,
     approvedAnswer: approved?.answer,
-  });
+  }, events);
 
   if (aiResult.unanswered) {
     await recordUnanswered(message, detectedLanguage, aiResult.provider === "unavailable" ? "provider_unavailable" : "insufficient_knowledge");
@@ -336,8 +352,9 @@ export async function POST(req: NextRequest) {
 
   const processingMs = Date.now() - startTime;
 
-  const response: ChatResponse = {
+  return {
     message: aiResult.content,
+    speech: "speech" in aiResult ? aiResult.speech : null,
     sessionId: sessionId!,
     detectedLanguage,
     intent: classification.intent,
@@ -346,6 +363,38 @@ export async function POST(req: NextRequest) {
     usedMockMode: aiResult.usedMockMode,
     processingMs,
   };
+  };
 
-  return NextResponse.json(response);
+  if (!body.stream || verbatim || retrievalFailed) return NextResponse.json(await answer());
+
+  // Streamed: one JSON object per line. "start" at once, "say" as soon as the
+  // spoken line is written (the voice begins on it), "text" as the answer is
+  // written, then "done" with the final message once it is saved.
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (event: object) => controller.enqueue(encoder.encode(JSON.stringify(event) + "\n"));
+      send({ type: "start", sessionId: sessionId!, detectedLanguage, intent: classification.intent });
+      try {
+        const done = await answer({
+          onSay: (say) => send({ type: "say", text: say }),
+          onText: (text) => send({ type: "text", text }),
+        });
+        send({ type: "done", ...done });
+      } catch (error) {
+        console.error("[chat] streamed answer failed:", error);
+        send({ type: "error", error: "Something went wrong. Please try again." });
+      }
+      controller.close();
+    },
+  });
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      // no-transform: Next's gzip would otherwise hold the stream back;
+      // X-Accel-Buffering: nginx (hr.rdcc.ai) would buffer it to the end.
+      "Cache-Control": "no-cache, no-transform",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }

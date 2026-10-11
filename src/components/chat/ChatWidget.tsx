@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { MessageSquareText, X, Mic, MicOff, Send, Volume2, VolumeX, ChevronDown } from "lucide-react";
 import { getLanguageName, isRTL } from "@/lib/i18n/languageDetector";
-import { isSpeechRecognitionSupported, createSpeechRecognition, speakText, stopSpeaking } from "@/lib/voice/voiceService";
+import { isSpeechRecognitionSupported, createSpeechRecognition, Speaker, stopSpeaking, unlockAudio } from "@/lib/voice/voiceService";
 import TaraWhatsAppCard from "./TaraWhatsAppCard";
 import { FACTS } from "@/lib/facts";
 import { withBase } from "@/lib/basePath";
@@ -31,6 +31,16 @@ interface ChatState {
   detectedLanguage: string;
   showLeadForm: boolean;
   leadFormShownForIntent: string | null;
+}
+
+/** The finished reply from /api/chat (JSON, or the stream's "done" line). */
+interface ChatReply {
+  message: string;
+  speech?: string | null;
+  sessionId: string;
+  detectedLanguage: string;
+  intent: string;
+  suggestLeadCapture: boolean;
 }
 
 type AvatarMode = "idle" | "listening" | "thinking" | "speaking";
@@ -183,8 +193,13 @@ export default function ChatWidget() {
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [avatarMode, setAvatarMode] = useState<AvatarMode>("idle");
   const [speechEnergy, setSpeechEnergy] = useState(0);
-  // How far TARA is through reading her latest reply (for the caption), or null.
-  const [spokenProgress, setSpokenProgress] = useState<number | null>(null);
+  // How far TARA is through reading her latest reply (for the caption), or
+  // null; and whether she is reading it (true) or saying a summary (false),
+  // in which case the caption is not highlighted.
+  const [spokenChars, setSpokenChars] = useState<number | null>(null);
+  const [captionFollowsVoice, setCaptionFollowsVoice] = useState(true);
+  // Set when a browser refused to play without a tap: the button calls it.
+  const [blockedResume, setBlockedResume] = useState<(() => void) | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -193,7 +208,8 @@ export default function ChatWidget() {
 
   const stopAvatarSpeech = useCallback(() => {
     setSpeechEnergy(0);
-    setSpokenProgress(null);
+    setSpokenChars(null);
+    setBlockedResume(null);
     setAvatarMode((current) => (current === "speaking" ? "idle" : current));
   }, []);
 
@@ -303,7 +319,9 @@ export default function ChatWidget() {
       }));
       setAvatarMode("thinking");
       setSpeechEnergy(0);
-      setSpokenProgress(null);
+      setSpokenChars(null);
+      setBlockedResume(null);
+      stopSpeaking();
       nod(true);
 
       setInputValue("");
@@ -316,6 +334,7 @@ export default function ChatWidget() {
             message: trimmed,
             sessionId: state.sessionId || undefined,
             language: state.detectedLanguage,
+            stream: true,
           }),
         });
 
@@ -324,55 +343,93 @@ export default function ChatWidget() {
           window.location.reload();
           return;
         }
-        const data = await res.json();
 
-        if (!res.ok) throw new Error(data.error || "Chat request failed");
-
-        const botMsg: Message = {
-          id: `bot-${Date.now()}`,
-          role: "assistant",
-          content: data.message,
-          timestamp: new Date(),
-          language: data.detectedLanguage,
-          intent: data.intent,
+        // TARA speaks every reply unless the visitor muted her.
+        const speaker = isTTSEnabled
+          ? new Speaker({
+              language: state.detectedLanguage,
+              onStart: () => setAvatarMode("speaking"),
+              onEnergy: setSpeechEnergy,
+              onSpokenChars: setSpokenChars,
+              onEnd: stopAvatarSpeech,
+              onBlocked: (resume) => setBlockedResume(() => () => {
+                setBlockedResume(null);
+                resume();
+              }),
+            })
+          : null;
+        const botId = `bot-${Date.now()}`;
+        const showBot = (patch: Partial<Message>, extra: Partial<ChatState> = {}) =>
+          setState((prev) => {
+            const exists = prev.messages.some((m) => m.id === botId);
+            const messages = exists
+              ? prev.messages.map((m) => (m.id === botId ? { ...m, ...patch } : m))
+              : [...prev.messages, { id: botId, role: "assistant" as const, content: "", timestamp: new Date(), language: prev.detectedLanguage, ...patch }];
+            return { ...prev, messages, isLoading: false, ...extra };
+          });
+        const finishReply = (data: ChatReply) => {
+          showBot(
+            { content: data.message, language: data.detectedLanguage, intent: data.intent },
+            {
+              sessionId: data.sessionId,
+              detectedLanguage: data.detectedLanguage,
+              showLeadForm: data.suggestLeadCapture && state.leadFormShownForIntent !== data.intent,
+              leadFormShownForIntent: data.suggestLeadCapture ? data.intent : state.leadFormShownForIntent,
+            },
+          );
+          setAvatarMode((mode) => (mode === "thinking" ? "idle" : mode));
+          if (!state.isOpen) setHasUnread(true);
         };
 
-        setState((prev) => ({
-          ...prev,
-          sessionId: data.sessionId,
-          messages: [...prev.messages, botMsg],
-          isLoading: false,
-          detectedLanguage: data.detectedLanguage,
-          showLeadForm: data.suggestLeadCapture && prev.leadFormShownForIntent !== data.intent,
-          leadFormShownForIntent: data.suggestLeadCapture ? data.intent : prev.leadFormShownForIntent,
-        }));
-
-        // TTS
-        if (isTTSEnabled) {
-          const speechStarted = await speakText({
-            text: data.message,
-            language: data.detectedLanguage,
-            onStart: () => setAvatarMode("speaking"),
-            onEnergy: setSpeechEnergy,
-            onProgress: setSpokenProgress,
-            onBoundary: (event) => {
-              const charLength = event.charLength || 4;
-              setSpeechEnergy(Math.min(1, 0.25 + charLength / 12));
-            },
-            onEnd: stopAvatarSpeech,
-          });
-          if (!speechStarted) {
-            stopAvatarSpeech();
+        const contentType = res.headers.get("content-type") || "";
+        if (contentType.includes("application/x-ndjson") && res.body) {
+          // Streamed: the spoken line first (the voice starts on it), then the
+          // written answer as it is written.
+          let spokenLine = false;
+          let written = "";
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let pending = "";
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            pending += decoder.decode(value, { stream: true });
+            const lines = pending.split("\n");
+            pending = lines.pop() || "";
+            for (const line of lines) {
+              if (!line.trim()) continue;
+              const event = JSON.parse(line);
+              if (event.type === "say") {
+                spokenLine = true;
+                setCaptionFollowsVoice(false);
+                speaker?.push(event.text);
+                speaker?.finish();
+              } else if (event.type === "text") {
+                written += event.text;
+                showBot({ content: written });
+                if (!spokenLine) {
+                  setCaptionFollowsVoice(true);
+                  speaker?.push(event.text);
+                }
+              } else if (event.type === "done") {
+                if (!spokenLine) speaker?.finish();
+                finishReply(event as ChatReply);
+              } else if (event.type === "error") {
+                throw new Error(event.error);
+              }
+            }
           }
         } else {
-          setAvatarMode("idle");
-          setSpeechEnergy(0);
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Chat request failed");
+          finishReply(data as ChatReply);
+          setCaptionFollowsVoice(!data.speech);
+          speaker?.push(data.speech || data.message);
+          speaker?.finish();
         }
-
-        // Set unread if widget closed
-        if (!state.isOpen) setHasUnread(true);
       } catch (err) {
         console.error("Chat error:", err);
+        stopSpeaking();
         setState((prev) => ({
           ...prev,
           isLoading: false,
@@ -392,11 +449,13 @@ export default function ChatWidget() {
         setSpeechEnergy(0);
       }
     },
-    [state.isLoading, state.sessionId, state.detectedLanguage, state.isOpen, isTTSEnabled, stopAvatarSpeech, nod]
+    [state.isLoading, state.sessionId, state.detectedLanguage, state.isOpen, state.leadFormShownForIntent, isTTSEnabled, stopAvatarSpeech, nod]
   );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Inside the visitor's own click or Enter: lets the reply's voice play.
+    unlockAudio();
     sendMessage(inputValue);
   };
 
@@ -415,6 +474,7 @@ export default function ChatWidget() {
 
   // ── Voice Input ───────────────────────────────────────────────────────
   const handleMicToggle = useCallback(() => {
+    unlockAudio(); // the reply to a spoken question is played without a further tap
     if (isListening) {
       stopListeningRef.current?.();
       setIsListening(false);
@@ -500,7 +560,7 @@ export default function ChatWidget() {
               <div className="flex items-center gap-1">
                 {/* TTS Toggle */}
                 <button
-                  onClick={() => { toggleVoice(!isTTSEnabled); stopSpeaking(); stopAvatarSpeech(); }}
+                  onClick={() => { unlockAudio(); toggleVoice(!isTTSEnabled); stopSpeaking(); stopAvatarSpeech(); }}
                   className="w-8 h-8 rounded-full flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-all"
                   title={isTTSEnabled ? "Mute voice" : "Enable voice"}
                 >
@@ -525,7 +585,8 @@ export default function ChatWidget() {
               // Her latest reply stays readable beside her even when the
               // WhatsApp card fills the message strip below.
               caption={state.isLoading ? null : [...state.messages].reverse().find((m) => m.role === "assistant")?.content ?? null}
-              captionProgress={spokenProgress}
+              captionSpokenChars={captionFollowsVoice ? spokenChars : null}
+              onTapToHear={blockedResume}
               nodSignal={nodSignal}
             />
 

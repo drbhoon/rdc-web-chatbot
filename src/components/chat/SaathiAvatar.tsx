@@ -6,7 +6,7 @@ import { withBase } from "@/lib/basePath";
 import { Mic, Sparkles, Volume2 } from "lucide-react";
 import type { AvatarMode } from "@/lib/avatar/motion";
 import LiveAvatarCanvas from "./LiveAvatarCanvas";
-import { readableText, spokenExcerpt } from "@/lib/voice/voiceService";
+import { readableText } from "@/lib/voice/voiceService";
 
 interface SaathiAvatarProps {
   mode: AvatarMode;
@@ -16,8 +16,10 @@ interface SaathiAvatarProps {
   onLanguageChange: (language: "en" | "hi") => void;
   /** Her latest reply, shown beside her; null while she is thinking. */
   caption?: string | null;
-  /** How far she is through reading it aloud (0..1), or null when not speaking. */
-  captionProgress?: number | null;
+  /** Characters of it she has read aloud, or null when she is not reading it. */
+  captionSpokenChars?: number | null;
+  /** Set when the browser would not play her voice without a tap. */
+  onTapToHear?: (() => void) | null;
   /** Each change asks for an understanding nod. */
   nodSignal?: number;
 }
@@ -28,10 +30,10 @@ export function captionSentences(text: string): string[] {
   return display.match(/[^.!?।]+(?:[.!?।]+|$)\s*/g) || [display];
 }
 
-/** The sentence being spoken at `progress` through the part that is read aloud. */
-export function currentSentence(text: string, progress: number | null | undefined): number {
-  if (progress === null || progress === undefined) return -1;
-  const at = progress * spokenExcerpt(text).length;
+/** The sentence being spoken once `spokenChars` characters of the reply have been read. */
+export function currentSentence(text: string, spokenChars: number | null | undefined): number {
+  if (spokenChars === null || spokenChars === undefined) return -1;
+  const at = spokenChars;
   let end = 0;
   const sentences = captionSentences(text);
   for (let i = 0; i < sentences.length; i++) {
@@ -41,10 +43,10 @@ export function currentSentence(text: string, progress: number | null | undefine
   return sentences.length - 1;
 }
 
-function Caption({ text, progress }: { text: string; progress: number | null | undefined }) {
+function Caption({ text, spokenChars, onTapToHear }: { text: string; spokenChars: number | null | undefined; onTapToHear?: (() => void) | null }) {
   const box = useRef<HTMLDivElement>(null);
   const sentences = captionSentences(text);
-  const current = currentSentence(text, progress);
+  const current = currentSentence(text, spokenChars);
 
   // Keep the sentence being spoken in view, scrolling the box, not the page.
   useEffect(() => {
@@ -60,6 +62,11 @@ function Caption({ text, progress }: { text: string; progress: number | null | u
 
   return (
     <div ref={box} className="saathi-caption" aria-live="polite">
+      {onTapToHear && (
+        <button type="button" className="saathi-tap-to-hear" onClick={onTapToHear}>
+          ▶ Tap to hear TARA
+        </button>
+      )}
       {sentences.map((sentence, i) => (
         <span key={i} className={i === current ? "is-current" : current >= 0 && i > current ? "is-ahead" : undefined}>
           {sentence}
@@ -100,7 +107,8 @@ export default function SaathiAvatar({
   languageDisabled = false,
   onLanguageChange,
   caption = null,
-  captionProgress = null,
+  captionSpokenChars = null,
+  onTapToHear = null,
   nodSignal = 0,
 }: SaathiAvatarProps) {
   const energy = mode === "speaking" ? Math.max(0, Math.min(1, speechEnergy)) : 0;
@@ -183,7 +191,7 @@ export default function SaathiAvatar({
           {language !== "en" && <span className="saathi-avatar-lang">{language.toUpperCase()}</span>}
         </div>
       </div>
-      {caption && <Caption text={caption} progress={captionProgress} />}
+      {caption && <Caption text={caption} spokenChars={captionSpokenChars} onTapToHear={onTapToHear} />}
       </div>
     </section>
   );

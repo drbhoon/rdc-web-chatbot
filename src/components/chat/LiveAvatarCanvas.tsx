@@ -21,6 +21,7 @@ const NECK_PIVOT = [0.505, 0.53];
 const HEAD_UNTIL = 0.47; // the chin: the head moves fully above this
 const BODY_FROM = 0.6; // the collar: nothing below this moves with the head
 const EYES = { left: 0.31, right: 0.69, top: 0.21, bottom: 0.35 };
+const EYE_LEVEL = 0.29;
 const GRID = 48;
 const TEXTURE_SIZE = 1024;
 
@@ -31,6 +32,7 @@ attribute vec2 a_uv;
 uniform float u_aspect;
 uniform vec2 u_pivot;
 uniform float u_tilt;
+uniform float u_pitch;
 uniform vec2 u_head;
 uniform float u_breath;
 uniform float u_sway;
@@ -46,6 +48,11 @@ void main() {
   // Work in units of image height, y down.
   vec2 p = vec2(a_uv.x * u_aspect, a_uv.y);
   float w = 1.0 - smoothstep(${HEAD_UNTIL.toFixed(3)}, ${BODY_FROM.toFixed(3)}, a_uv.y);
+  // A forward nod seen from the front: the eyes and nose move down most, the
+  // crown hardly at all and the chin less than the eyes, so the lower face
+  // shortens. Peaks at eye level; nothing below the collar moves.
+  float pitchShape = smoothstep(0.0, ${EYE_LEVEL.toFixed(3)}, a_uv.y) * (1.0 - 0.75 * smoothstep(${EYE_LEVEL.toFixed(3)}, ${HEAD_UNTIL.toFixed(3)}, a_uv.y)) * w;
+  p.y += u_pitch * pitchShape;
   p = rotate(p, vec2(u_pivot.x * u_aspect, u_pivot.y), u_tilt * w);
   p += vec2(u_head.x, u_head.y) * w;
   // Breathing lifts the chest and head; the bottom edge stays put.
@@ -205,7 +212,7 @@ export default function LiveAvatarCanvas({ mode, speechEnergy, nodSignal = 0, cl
         ["u_rest", "u_soft", "u_open", "u_blinkFrame"].forEach((name, unit) => gl.uniform1i(gl.getUniformLocation(program, name), unit));
         const at = (name: string) => gl.getUniformLocation(program, name);
         const u = {
-          aspect: at("u_aspect"), pivot: at("u_pivot"), tilt: at("u_tilt"), head: at("u_head"), breath: at("u_breath"),
+          aspect: at("u_aspect"), pivot: at("u_pivot"), tilt: at("u_tilt"), pitch: at("u_pitch"), head: at("u_head"), breath: at("u_breath"),
           sway: at("u_sway"), place: at("u_place"), mouth: at("u_mouth"), blink: at("u_blink"),
         };
         gl.uniform1f(u.aspect, IMAGE_ASPECT);
@@ -238,6 +245,7 @@ export default function LiveAvatarCanvas({ mode, speechEnergy, nodSignal = 0, cl
           gl.clear(gl.COLOR_BUFFER_BIT);
           gl.uniform4f(u.place, (1 - placeW) / 2, 1 - placeH, placeW, placeH);
           gl.uniform1f(u.tilt, (pose.tilt * Math.PI) / 180);
+          gl.uniform1f(u.pitch, pose.pitch);
           gl.uniform2f(u.head, pose.turn, pose.rise + pose.nod);
           gl.uniform1f(u.breath, pose.breath * 0.0035);
           gl.uniform1f(u.sway, (pose.sway * Math.PI) / 180);

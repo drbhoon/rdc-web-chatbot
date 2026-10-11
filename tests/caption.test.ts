@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readableText, spokenExcerpt } from "../src/lib/voice/voiceService";
+import { readableText, spokenExcerpt, takePieces } from "../src/lib/voice/voiceService";
 import { captionSentences, currentSentence } from "../src/components/chat/SaathiAvatar";
 import { speechInput } from "../src/lib/voice/speechInstructions";
 
@@ -35,11 +35,28 @@ test("what the voice reads is the start of what the caption shows, so the highli
   assert.equal(captionSentences(long).join(""), readableText(long));
 });
 
-test("the highlighted sentence follows the voice", () => {
+test("the highlighted sentence follows the characters spoken", () => {
+  // Sentences of 55, 33, 36 and 30 characters.
   assert.equal(currentSentence(reply, null), -1);
   assert.equal(currentSentence(reply, 0), 0);
-  assert.equal(currentSentence(reply, 0.5), 1);
-  assert.equal(currentSentence(reply, 0.6), 2);
-  assert.equal(currentSentence(reply, 0.99), 3);
+  assert.equal(currentSentence(reply, 60), 1);
+  assert.equal(currentSentence(reply, 100), 2);
+  assert.equal(currentSentence(reply, 500), 3);
   assert.equal(captionSentences(reply).length, 4);
+});
+
+test("a reply still arriving is spoken in whole sentences, the first one early", () => {
+  // The first piece goes as soon as one sentence of 40+ characters is complete.
+  let {pieces, rest} = takePieces("RDC makes ready-mix concrete in 141 plants. It deliv", 40);
+  assert.deepEqual(pieces, ["RDC makes ready-mix concrete in 141 plants."]);
+  assert.equal(rest, " It deliv");
+  // Never at a full stop that more text may follow ("Rs." then "5,000").
+  ({pieces, rest} = takePieces("The price is about Rs.", 10));
+  assert.deepEqual(pieces, []);
+  // Short sentences gather into one piece of a natural length.
+  ({pieces} = takePieces("Yes. RDC does. It is quick and clean to pour. ", 40));
+  assert.deepEqual(pieces, ["Yes. RDC does. It is quick and clean to pour."]);
+  // Hindi full stops count too.
+  ({pieces} = takePieces("आप WhatsApp पर RDC Tara से बात कर सकते हैं। धन्यवाद", 20));
+  assert.deepEqual(pieces, ["आप WhatsApp पर RDC Tara से बात कर सकते हैं।"]);
 });
