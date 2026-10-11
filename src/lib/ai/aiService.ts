@@ -371,6 +371,24 @@ export function keepBrandNamesInEnglish(text: string): string {
     .replace(/(?:TARA|Tara|तारा|टारा)\s+(?:ऑनलाइन|ओनलाइन|Online)/g, "TARA Online");
 }
 
+/**
+ * "Region" is an internal RDC business unit, never a way to describe where RDC
+ * works. The prompt forbids the word, but the model still slips ("the West
+ * and Central regions"), so it is replaced in every reply.
+ */
+export function withoutRegionWord(text: string): string {
+  const keepCase = (word: string, plain: string) => (/^[A-Z]/.test(word) ? plain[0].toUpperCase() + plain.slice(1) : plain);
+  return text
+    .replace(/\bregional\b/gi, (w) => keepCase(w, "local"))
+    .replace(/\bregions\b/gi, (w) => keepCase(w, "areas"))
+    .replace(/\bregion\b/gi, (w) => keepCase(w, "area"));
+}
+
+/** Every fix applied to a reply as it is written. */
+export function cleanReply(text: string): string {
+  return withoutRegionWord(keepBrandNamesInEnglish(text));
+}
+
 /** One knowledge excerpt as the model sees it; RDC-reviewed answers are labelled as such. */
 export function formatSource(c: RetrievedChunk, i: number): string {
   const label = c.category === APPROVED_CATEGORY ? "APPROVED ANSWER (written by RDC)" : c.title;
@@ -440,7 +458,7 @@ export async function generateAIResponse(request: AIRequest, events?: ReplyEvent
   let content = "";
   let actualProvider = provider;
   let usedMockMode = false;
-  const parser = new ReplyParser(keepBrandNamesInEnglish);
+  const parser = new ReplyParser(cleanReply);
   const report = (piece: { say?: string; text: string }) => {
     if (piece.say) events?.onSay?.(piece.say);
     if (piece.text) events?.onText?.(piece.text);
@@ -475,7 +493,7 @@ export async function generateAIResponse(request: AIRequest, events?: ReplyEvent
 
   // A streamed reply was parsed as it came; anything else is parsed whole now
   // (and reported, so a caller that asked for events still gets them).
-  const final = streamed ? parser : new ReplyParser(keepBrandNamesInEnglish);
+  const final = streamed ? parser : new ReplyParser(cleanReply);
   if (!streamed) report(final.push(content));
   report(final.finish());
   const unanswered = final.unanswered;

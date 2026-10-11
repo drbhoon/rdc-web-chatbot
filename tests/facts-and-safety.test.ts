@@ -4,7 +4,7 @@ import { readFileSync } from "fs";
 import { FACTS, PLANT_LOCATIONS, factsOfRecord } from "../src/lib/facts";
 import { rateLimitedKey } from "../src/lib/rateLimit";
 import { bareEmployeeName, extractEmployeeName, isEmployeeContactRequest, isLeaderName } from "../src/lib/employee/directory";
-import { keepBrandNamesInEnglish, mentionsTaraNumber, whatsAppReferral, withoutDiscontinued } from "../src/lib/ai/aiService";
+import { keepBrandNamesInEnglish, mentionsTaraNumber, whatsAppReferral, withoutDiscontinued, withoutRegionWord } from "../src/lib/ai/aiService";
 
 test("facts of record: the official website, numbers and plant count RDC gave", () => {
   const block = factsOfRecord();
@@ -74,6 +74,15 @@ test("brand names stay in English letters in Hindi replies", () => {
   // The ordinary word for star is left alone.
   assert.equal(keepBrandNamesInEnglish("आसमान में एक तारा है"), "आसमान में एक तारा है");
   assert.equal(keepBrandNamesInEnglish("मैं तारा ऑनलाइन हूं"), "मैं TARA Online हूं");
+});
+
+test("a reply never says region: the word is replaced even when the model slips", () => {
+  assert.equal(
+    withoutRegionWord("Adnan Khan leads RDC's business in the West and Central regions of India."),
+    "Adnan Khan leads RDC's business in the West and Central areas of India.",
+  );
+  assert.equal(withoutRegionWord("Regional teams in each region"), "Local teams in each area");
+  assert.equal(withoutRegionWord("Nothing to change."), "Nothing to change.");
 });
 
 test("the discontinued Customer Connect app never reaches the model", () => {
