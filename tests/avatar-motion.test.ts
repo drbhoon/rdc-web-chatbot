@@ -58,7 +58,8 @@ test("listening: the head only nods — a clear nod every few seconds, nothing e
   }
   const starts = poses.filter((p, i) => i > 0 && p.pitch > 0 && poses[i - 1].pitch === 0).length;
   assert.ok(starts >= 4 && starts <= 8, `${starts} nods in 18 s`);
-  assert.ok(Math.max(...poses.map((p) => p.pitch)) > 0.028, "deep enough to see");
+  const deepest = Math.max(...poses.map((p) => p.pitch + p.nod));
+  assert.ok(deepest > 0.015 && deepest < 0.024, `visible but not pronounced: ${deepest.toFixed(3)}`);
 });
 
 test("reduced motion: the head keeps still, blinking stays", () => {
@@ -75,8 +76,8 @@ test("the understanding nod: one clear forward nod with a soft blink at the bott
   const poses = run("thinking", 3, 0, false, motion);
   const nod = poses.slice(0, 80);
   const pitch = nod.map((p) => p.pitch);
-  assert.ok(Math.max(...pitch) > 0.028, "the head pitches forward, visibly");
-  assert.ok(Math.max(...nod.map((p) => p.nod)) > 0.006, "and dips with it");
+  assert.ok(Math.max(...pitch) > 0.012 && Math.max(...pitch) < 0.019, "the head pitches forward, visibly but gently");
+  assert.ok(Math.max(...nod.map((p) => p.nod)) > 0.003, "and dips with it");
   // One smooth nod, not a bob: pitch rises to a single peak and comes back.
   const peaks = pitch.filter((d, i) => i > 0 && i < pitch.length - 1 && d > pitch[i - 1] && d >= pitch[i + 1]);
   assert.equal(peaks.length, 1);
@@ -86,7 +87,10 @@ test("the understanding nod: one clear forward nod with a soft blink at the bott
   assert.ok(peakAt < 40, `lowest at frame ${peakAt}`);
   // A slow, full blink at the bottom of the nod (never half-closed lids: they ghost).
   const closed = nod.filter((p) => p.blink === 1).length / 60;
-  assert.ok(closed > 0.06, `eyes fully closed ${closed.toFixed(2)} s`);
+  assert.ok(closed > 0.03, `eyes fully closed ${closed.toFixed(2)} s`);
+  // Half-closed for no longer than an ordinary blink takes (it looks smudged).
+  const half = nod.filter((p) => p.blink > 0.15 && p.blink < 0.85).length / 60;
+  assert.ok(half < 0.14, `half-closed ${half.toFixed(2)} s`);
   const blinkAt = nod.findIndex((p) => p.blink === 1);
   assert.ok(Math.abs(blinkAt - peakAt) < 12, "the blink falls at the bottom of the nod");
   // No lean to the side while nodding.

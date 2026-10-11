@@ -39,11 +39,17 @@ const ZERO: HeadPose = { tilt: 0, rise: 0, turn: 0 };
 export const LIMITS = { tilt: 5, rise: 0.02, turn: 0.012, nod: 0.01, pitch: 0.035 };
 
 // The listening nod: the head tips forward (pitch) and dips a little (drop),
-// quicker down than up, then comes back. Big enough to see at a glance — the
-// 2026-10-10 version (pitch 0.015) was missed by RDC's testers.
-const ACK_SECONDS = 1.25;
-const ACK_PITCH = 0.03;
-const ACK_DROP = 0.007;
+// quicker down than up, then comes back. Tuned on RDC's tests: a 1.5% pitch
+// with a lean was missed (2026-10-10); 3.7% in all was too pronounced
+// (2026-10-11, about 4% of the avatar's height on screen). Now about 2%,
+// varying a little from nod to nod as a real listener's do.
+const ACK_SECONDS = 1.1;
+const ACK_PITCH = 0.017;
+const ACK_DROP = 0.004;
+const ACK_SCALE: [number, number] = [0.8, 1.05];
+// A blink at the bottom of a nod, only a little slower than an ordinary one:
+// a slow blink lingers on the half-closed frame, which looks smudged.
+const NOD_BLINK_SCALE = 1.15;
 // Where in the nod the head is lowest (fraction of ACK_SECONDS).
 const ACK_BOTTOM = 0.4;
 // While the visitor speaks (mic on), a nod every few seconds, and no other
@@ -88,6 +94,7 @@ export class AvatarMotion {
   // The understanding nod (acknowledge()): when it started, and until when it owns the head.
   private ackUntil = -1;
   private ackStartedAt = -10;
+  private ackScale = 1;
   private nextListenNodAt = 0;
   /** 0 = the usual small movements; 1 = perfectly still apart from the nod (listening). */
   private readonly still = new Spring();
@@ -136,14 +143,14 @@ export class AvatarMotion {
     if (t < this.ackUntil + 0.8) return; // under way, or only just finished
     this.ackStartedAt = t;
     this.ackUntil = t + ACK_SECONDS;
+    this.ackScale = this.between(...ACK_SCALE);
     this.gesture = ZERO;
     this.gestureEndsAt = t;
     this.nextGestureAt = this.ackUntil + this.between(1, 2.5);
     this.nextListenNodAt = this.ackUntil + this.between(...LISTEN_NOD_GAP);
-    // A soft, slow blink whose closed moment falls at the bottom of the nod.
-    // (Half-lowered lids were tried: blending half of the closed-eye photo
-    // leaves ghosted eyes.)
-    if (blink) this.slowBlinkAt = t + ACK_SECONDS * ACK_BOTTOM - 0.13;
+    // A blink whose closed moment falls at the bottom of the nod. (Half-lowered
+    // lids were tried: blending half of the closed-eye photo ghosts the eyes.)
+    if (blink) this.slowBlinkAt = t + ACK_SECONDS * ACK_BOTTOM - 0.06 * NOD_BLINK_SCALE;
   }
 
   /** 0..1: how far down the nod the head is — eased, quicker down than up. */
@@ -184,7 +191,7 @@ export class AvatarMotion {
   private blinkAmount(speaking: boolean): number {
     if (this.slowBlinkAt > 0 && this.t >= this.slowBlinkAt) {
       this.blinkStartedAt = this.t;
-      this.blinkScale = 2.2;
+      this.blinkScale = NOD_BLINK_SCALE;
       this.slowBlinkAt = -1;
       this.secondBlinkAt = -1;
       this.nextBlinkAt = this.t + this.between(2.5, 5);
@@ -226,7 +233,7 @@ export class AvatarMotion {
     }
 
     // Listening: a nod every few seconds, sometimes with a soft blink.
-    if (mode === "listening" && !acknowledging && t >= this.nextListenNodAt) this.acknowledge(this.random() < 0.5);
+    if (mode === "listening" && !acknowledging && t >= this.nextListenNodAt) this.acknowledge(this.random() < 0.35);
     const nodding = t < this.ackUntil;
     const blink = this.blinkAmount(speaking);
     if (reducedMotion) return { tilt: 0, rise: 0, turn: 0, nod: 0, pitch: 0, breath: 0, sway: 0, blink };
@@ -258,7 +265,7 @@ export class AvatarMotion {
     const microTurn = lively * 0.0014 * Math.sin(t * 0.29 + 2);
 
     const sinceNod = t - this.nodStartedAt;
-    const depth = this.ackDepth();
+    const depth = this.ackDepth() * this.ackScale;
     const nod = (sinceNod < this.nodLength ? this.nodAmp * Math.sin((Math.PI * sinceNod) / this.nodLength) : 0) + ACK_DROP * depth;
 
     const breathPeriod = speaking ? 3.4 : 4.4;
