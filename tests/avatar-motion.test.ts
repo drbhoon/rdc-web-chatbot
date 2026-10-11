@@ -48,12 +48,17 @@ test("blinks come at irregular intervals, 2-6 s apart", () => {
   assert.ok(poses.every((p) => p.blink >= 0 && p.blink <= 1));
 });
 
-test("listening leans the head to one side and holds it", () => {
+test("listening: the head only nods — a clear nod every few seconds, nothing else moves", () => {
   const motion = new AvatarMotion(seeded(3));
   run("idle", 5, 0, false, motion);
-  const poses = run("listening", 6, 0, false, motion).slice(120);
-  const mean = poses.reduce((n, p) => n + p.tilt, 0) / poses.length;
-  assert.ok(Math.abs(mean) > 1.2, `mean tilt ${mean.toFixed(2)}`);
+  const poses = run("listening", 20, 0, false, motion).slice(120); // after the fade-in
+  for (const p of poses) {
+    assert.ok(Math.abs(p.tilt) < 0.05 && Math.abs(p.turn) < 0.0002 && Math.abs(p.rise) < 0.0002, "no tilt, turn or rise");
+    assert.ok(Math.abs(p.sway) < 0.01 && Math.abs(p.breath) < 0.03, "no sway or breathing");
+  }
+  const starts = poses.filter((p, i) => i > 0 && p.pitch > 0 && poses[i - 1].pitch === 0).length;
+  assert.ok(starts >= 4 && starts <= 8, `${starts} nods in 18 s`);
+  assert.ok(Math.max(...poses.map((p) => p.pitch)) > 0.028, "deep enough to see");
 });
 
 test("reduced motion: the head keeps still, blinking stays", () => {
@@ -62,29 +67,30 @@ test("reduced motion: the head keeps still, blinking stays", () => {
   assert.ok(poses.some((p) => p.blink > 0));
 });
 
-test("the understanding nod: one slow forward nod with a slow blink, a slight lean, then settles", () => {
+test("the understanding nod: one clear forward nod with a soft blink at the bottom, then level again", () => {
   const motion = new AvatarMotion(seeded(11));
-  run("listening", 3, 0, false, motion);
+  run("idle", 3, 0, false, motion);
   motion.acknowledge();
   // The question is sent at once: the mode turns to "thinking", the nod still finishes.
   const poses = run("thinking", 3, 0, false, motion);
-  const nod = poses.slice(0, 110);
+  const nod = poses.slice(0, 80);
   const pitch = nod.map((p) => p.pitch);
-  assert.ok(Math.max(...pitch) > 0.014, "the head pitches forward");
+  assert.ok(Math.max(...pitch) > 0.028, "the head pitches forward, visibly");
+  assert.ok(Math.max(...nod.map((p) => p.nod)) > 0.006, "and dips with it");
   // One smooth nod, not a bob: pitch rises to a single peak and comes back.
   const peaks = pitch.filter((d, i) => i > 0 && i < pitch.length - 1 && d > pitch[i - 1] && d >= pitch[i + 1]);
   assert.equal(peaks.length, 1);
-  assert.ok(pitch.every((d, i) => i === 0 || Math.abs(d - pitch[i - 1]) < 0.0006), "no jumps");
-  // A slow, full blink near the bottom of the nod (never half-closed lids: they ghost).
+  assert.ok(pitch.every((d, i) => i === 0 || Math.abs(d - pitch[i - 1]) < 0.002), "no jumps");
+  // Quicker down than up.
+  const peakAt = pitch.indexOf(Math.max(...pitch));
+  assert.ok(peakAt < 40, `lowest at frame ${peakAt}`);
+  // A slow, full blink at the bottom of the nod (never half-closed lids: they ghost).
   const closed = nod.filter((p) => p.blink === 1).length / 60;
   assert.ok(closed > 0.06, `eyes fully closed ${closed.toFixed(2)} s`);
-  const peakAt = pitch.indexOf(Math.max(...pitch));
   const blinkAt = nod.findIndex((p) => p.blink === 1);
-  assert.ok(Math.abs(blinkAt - peakAt) < 20, "the blink falls at the bottom of the nod");
-  // A gentle lean, smaller than the other gestures, and no sliding of the head.
-  const lean = Math.max(...nod.map((p) => Math.abs(p.tilt)));
-  assert.ok(lean > 1.2 && lean < 3.2, `lean ${lean.toFixed(2)}`);
-  assert.ok(nod.every((p) => Math.abs(p.nod) < 0.001));
+  assert.ok(Math.abs(blinkAt - peakAt) < 12, "the blink falls at the bottom of the nod");
+  // No lean to the side while nodding.
+  assert.ok(nod.every((p) => Math.abs(p.tilt) < 1.2), "no lean");
   // Repeated calls during the nod are ignored; afterwards the head is level again.
   motion.acknowledge();
   assert.equal(poses.at(-1)!.pitch, 0);

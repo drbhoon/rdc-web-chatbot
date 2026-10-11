@@ -1,14 +1,19 @@
 /**
- * Publishes reviewed answers given as JSON, without the review workbook — for a
- * database that never saw the questions (the Railway test bed, for one).
+ * Publishes reviewed answers kept as JSON in knowledge/approved/, without the
+ * review workbook.
  *
- *     npx tsx scripts/publishApproved.ts <answers.json>
+ *     npx tsx scripts/publishApproved.ts <file.json | folder> [--if-unanswered]
  *
- * The file is [{question, language, answer}]. Each question is recorded (or
+ * Each file is [{question, language, answer}]. Each question is recorded (or
  * found by its fingerprint) and its answer published exactly as Admin >
  * Knowledge upload publishes one; running it again changes nothing.
+ *
+ * --if-unanswered leaves alone any question that already has a published
+ * answer. hr.rdcc.ai runs it that way on every start, so the answers arrive
+ * with a deploy but never overwrite one a reviewer uploaded since.
  */
-import { readFileSync } from "fs";
+import { readdirSync, readFileSync, statSync } from "fs";
+import path from "path";
 import { prisma } from "@/lib/db";
 import { embedTexts } from "@/lib/knowledge/embeddings";
 import { approvedEmbeddingText, saveApprovedChunk } from "@/lib/knowledge/approved";
@@ -16,29 +21,42 @@ import { questionFingerprint } from "@/lib/knowledge/unanswered";
 
 interface Approved { question: string; language: string; answer: string }
 
-async function main(file: string) {
-  const items: Approved[] = JSON.parse(readFileSync(file, "utf8"));
+function readAnswers(target: string): Approved[] {
+  const files = statSync(target).isDirectory()
+    ? readdirSync(target).filter((f) => f.endsWith(".json")).sort().map((f) => path.join(target, f))
+    : [target];
+  const items: Approved[] = files.flatMap((f) => JSON.parse(readFileSync(f, "utf8")));
   if (!items.every((i) => i.question?.trim() && i.answer?.trim() && i.language)) throw new Error("Each entry needs question, language and answer.");
-  const vectors = await embedTexts(items.map((i) => approvedEmbeddingText(i.question, i.answer)));
-  let published = 0;
+  return items;
+}
+
+async function main(target: string, ifUnanswered: boolean) {
+  const items = readAnswers(target);
+  const saved = await prisma.unansweredQuestion.findMany({where: {fingerprint: {in: items.map((i) => questionFingerprint(i.question))}}});
+  const todo = items.filter((item) => {
+    const row = saved.find((s) => s.fingerprint === questionFingerprint(item.question));
+    if (row?.status !== "answered") return true;
+    return !ifUnanswered && row.answer !== item.answer;
+  });
+  if (!todo.length) return console.log(`[approved] all ${items.length} reviewed answers already published.`);
+
+  const vectors = await embedTexts(todo.map((i) => approvedEmbeddingText(i.question, i.answer)));
   await prisma.$transaction(async (tx) => {
-    for (const [n, item] of items.entries()) {
+    for (const [n, item] of todo.entries()) {
       const fingerprint = questionFingerprint(item.question);
-      const saved = await tx.unansweredQuestion.upsert({
+      const row = await tx.unansweredQuestion.upsert({
         where: {fingerprint},
         create: {fingerprint, question: item.question, language: item.language, reason: "reviewed", source: "daily"},
         update: {},
       });
-      if (saved.status === "answered" && saved.answer === item.answer) continue;
-      await tx.unansweredQuestion.update({where: {id: saved.id}, data: {answer: item.answer, status: "answered", answeredAt: new Date(), version: {increment: 1}}});
-      await saveApprovedChunk(tx, saved.id, saved.question, item.answer, vectors[n]);
-      published++;
+      await tx.unansweredQuestion.update({where: {id: row.id}, data: {answer: item.answer, status: "answered", answeredAt: new Date(), version: {increment: 1}}});
+      await saveApprovedChunk(tx, row.id, row.question, item.answer, vectors[n]);
     }
   }, {timeout: 120000});
-  console.log(`[approved] ${published} published, ${items.length - published} already up to date.`);
+  console.log(`[approved] ${todo.length} published, ${items.length - todo.length} left as they were.`);
 }
 
-main(process.argv[2]).then(() => prisma.$disconnect()).catch(async (error) => {
+main(process.argv[2], process.argv.includes("--if-unanswered")).then(() => prisma.$disconnect()).catch(async (error) => {
   console.error(error);
   await prisma.$disconnect();
   process.exit(1);

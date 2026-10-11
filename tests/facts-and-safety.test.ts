@@ -21,13 +21,17 @@ test("facts of record: the official website, numbers and plant count RDC gave", 
 
 test("leadership is public: every EXCO member is in the facts of record, without the word region", () => {
   const block = factsOfRecord();
-  for (const name of ["Anil Banchhor", "Dr K S Bhoon", "Manish Modani", "Adnan Khan", "Japjit Singh", "D K Jaiswal",
-    "Naresh Chundoori", "Durai Baskaran", "Rajesh N", "Pretheesh Sukumaran", "Mangesh Garud", "Avijit Chaubey"]) assert.ok(block.includes(name), name);
+  // Names as in the HR portal's employee master.
+  for (const name of ["Anil Kumar Banchhor", "Dr K S Bhoon", "Manish Modani", "Mohammad Adnan Khan", "Japjit Singh", "Dharmendra Kumar Jaiswal",
+    "Naresh Chundoori", "Baskaran D", "Rajesh N", "Pretheesh Sukumaran", "Mangesh Garud", "Avijit Chaubey"]) assert.ok(block.includes(name), name);
+  assert.match(block, /ReaDymix Concrete — the name says it all/);
+  assert.match(block, /3,500 m³ of concrete per plant a month[^\n]*4,000 m³/);
   assert.equal(FACTS.leadership.businessHeads.length, 8);
   assert.doesNotMatch(block, /region/i);
   // Asked by name, a leader is answered from these facts, not the employee directory.
   assert.ok(isLeaderName("Anil Banchhor") && isLeaderName("Dr Bhoon") === false && isLeaderName("Adnan Khan") && isLeaderName("Rajesh N"));
   assert.equal(isLeaderName("Rajesh"), false, "a common first name alone could be anyone");
+  assert.equal(isLeaderName("Anil Kumar"), false, "nor a first name and a common middle name");
   assert.equal(isLeaderName("Asha Example"), false);
 });
 

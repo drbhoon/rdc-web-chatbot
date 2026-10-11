@@ -36,11 +36,19 @@ const ZERO: HeadPose = { tilt: 0, rise: 0, turn: 0 };
 
 // How far each gesture may go. A real head seldom tilts more than a few
 // degrees in conversation; more than this reads as a cartoon.
-export const LIMITS = { tilt: 5, rise: 0.02, turn: 0.012, nod: 0.01, pitch: 0.02 };
+export const LIMITS = { tilt: 5, rise: 0.02, turn: 0.012, nod: 0.01, pitch: 0.035 };
 
-// The understanding nod: one slow forward nod, eased in and out.
-const ACK_SECONDS = 1.7;
-const ACK_PITCH = 0.015;
+// The listening nod: the head tips forward (pitch) and dips a little (drop),
+// quicker down than up, then comes back. Big enough to see at a glance — the
+// 2026-10-10 version (pitch 0.015) was missed by RDC's testers.
+const ACK_SECONDS = 1.25;
+const ACK_PITCH = 0.03;
+const ACK_DROP = 0.007;
+// Where in the nod the head is lowest (fraction of ACK_SECONDS).
+const ACK_BOTTOM = 0.4;
+// While the visitor speaks (mic on), a nod every few seconds, and no other
+// head movement at all (RDC, 2026-10-11).
+const LISTEN_NOD_GAP: [number, number] = [1.5, 2.6];
 
 class Spring {
   value = 0;
@@ -80,6 +88,9 @@ export class AvatarMotion {
   // The understanding nod (acknowledge()): when it started, and until when it owns the head.
   private ackUntil = -1;
   private ackStartedAt = -10;
+  private nextListenNodAt = 0;
+  /** 0 = the usual small movements; 1 = perfectly still apart from the nod (listening). */
+  private readonly still = new Spring();
 
   constructor(random: () => number = Math.random) {
     this.random = random;
@@ -92,9 +103,9 @@ export class AvatarMotion {
   /** The resting head position each mode leans toward. */
   private modePose(mode: AvatarMode): HeadPose {
     switch (mode) {
-      // Attentive: head inclined to one side, slightly forward.
+      // Listening: the head holds level; only the nods move it.
       case "listening":
-        return { tilt: 2.4 * this.side, rise: 0.003, turn: 0 };
+        return ZERO;
       // Thinking: chin up, a glance away.
       case "thinking":
         return { tilt: -1.6 * this.side, rise: -0.008, turn: 0.005 * this.side };
@@ -115,33 +126,32 @@ export class AvatarMotion {
   }
 
   /**
-   * The "I understand" nod of someone listening to a question: the head tips to
-   * one side and the chin dips in a slow nod, then a smaller second one, with a
-   * soft blink at the bottom of the first; about two seconds, then back. Modelled
-   * on a listening AI presenter (RDC's reference, 2026-10-10). Call it while the
-   * visitor is asking; calls during one already under way are ignored.
+   * The "I understand" nod of someone listening: the head tips forward and
+   * comes back, with nothing else moving (RDC's reference: an AI presenter
+   * listening, 2026-10-10). Call it while the visitor is asking; calls during
+   * a nod already under way are ignored. In listening mode it repeats by itself.
    */
-  acknowledge(): void {
+  acknowledge(blink = true): void {
     const t = this.t;
-    if (t < this.ackUntil - 0.4) return;
-    this.side = this.random() < 0.5 ? -1 : 1;
+    if (t < this.ackUntil + 0.8) return; // under way, or only just finished
     this.ackStartedAt = t;
-    this.ackUntil = t + ACK_SECONDS + 0.3;
-    // A gentle lean to one side under the nod; the nod itself is a pitch, not
-    // the head sliding down (which is what made the first version look odd).
-    this.gesture = { tilt: this.side * this.between(1.6, 2.2), rise: 0, turn: 0 };
-    this.gestureEndsAt = t + ACK_SECONDS;
+    this.ackUntil = t + ACK_SECONDS;
+    this.gesture = ZERO;
+    this.gestureEndsAt = t;
     this.nextGestureAt = this.ackUntil + this.between(1, 2.5);
-    // One soft, slow blink at the bottom of the nod. (Half-lowered lids were
-    // tried: blending half of the closed-eye photo leaves ghosted eyes.)
-    this.slowBlinkAt = t + ACK_SECONDS * 0.4;
+    this.nextListenNodAt = this.ackUntil + this.between(...LISTEN_NOD_GAP);
+    // A soft, slow blink whose closed moment falls at the bottom of the nod.
+    // (Half-lowered lids were tried: blending half of the closed-eye photo
+    // leaves ghosted eyes.)
+    if (blink) this.slowBlinkAt = t + ACK_SECONDS * ACK_BOTTOM - 0.13;
   }
 
-  /** 0..1: how far into the understanding nod the head is (smooth in and out). */
+  /** 0..1: how far down the nod the head is — eased, quicker down than up. */
   private ackDepth(): number {
-    const since = this.t - this.ackStartedAt;
-    if (since < 0 || since > ACK_SECONDS) return 0;
-    return Math.sin((Math.PI * since) / ACK_SECONDS) ** 2;
+    const s = (this.t - this.ackStartedAt) / ACK_SECONDS;
+    if (s <= 0 || s >= 1) return 0;
+    const ease = (x: number) => x * x * (3 - 2 * x);
+    return s < ACK_BOTTOM ? ease(s / ACK_BOTTOM) : 1 - ease((s - ACK_BOTTOM) / (1 - ACK_BOTTOM));
   }
 
   private pickGesture(mode: AvatarMode): void {
@@ -149,9 +159,7 @@ export class AvatarMotion {
     const roll = this.random();
     let pose: HeadPose;
     if (mode === "listening") {
-      // Listeners mostly hold still and nod now and then ("mm-hmm").
-      if (roll < 0.6) this.startNod(this.between(0.003, 0.005), 0.6);
-      pose = { tilt: this.between(-0.8, 0.8), rise: 0, turn: 0 };
+      pose = ZERO; // listening moves the head only by nodding
     } else if (roll < 0.34) {
       this.side = this.random() < 0.5 ? -1 : 1;
       pose = { tilt: this.side * this.between(1.8, 3.4), rise: this.between(-0.002, 0.002), turn: 0 };
@@ -209,20 +217,25 @@ export class AvatarMotion {
       this.lastMode = mode;
       // A nod in progress finishes first (the question was just sent and the
       // mode turned to "thinking"); the new mode takes over after it.
+      if (mode === "listening") this.nextListenNodAt = t + this.between(0.6, 1.2);
       if (!acknowledging) {
-        if (mode === "listening") this.side = this.random() < 0.5 ? -1 : 1;
         this.gesture = ZERO;
         this.nextGestureAt = t + this.between(0.8, 2);
         this.maybeBlinkWithMovement();
       }
     }
 
+    // Listening: a nod every few seconds, sometimes with a soft blink.
+    if (mode === "listening" && !acknowledging && t >= this.nextListenNodAt) this.acknowledge(this.random() < 0.5);
+    const nodding = t < this.ackUntil;
     const blink = this.blinkAmount(speaking);
     if (reducedMotion) return { tilt: 0, rise: 0, turn: 0, nod: 0, pitch: 0, breath: 0, sway: 0, blink };
 
-    if (!acknowledging && t >= this.nextGestureAt) this.pickGesture(mode);
+    if (!nodding && mode !== "listening" && t >= this.nextGestureAt) this.pickGesture(mode);
     const gesture = t < this.gestureEndsAt ? this.gesture : ZERO;
-    const base = acknowledging ? ZERO : this.modePose(mode);
+    const base = nodding ? ZERO : this.modePose(mode);
+    // Fade every other movement out while she listens or nods, and back in after.
+    const calm = 1 - this.still.step(nodding || mode === "listening" ? 1 : 0, dt, 4);
 
     // Loudness, smoothed; a loud syllable after a pause earns an emphasis nod.
     this.energy += (Math.max(0, Math.min(1, speechEnergy)) - this.energy) * (1 - Math.exp(-dt / 0.12));
@@ -232,20 +245,21 @@ export class AvatarMotion {
     }
     this.wasLoud = loud;
 
-    // The understanding nod moves slower and softer than other gestures.
-    const omega = acknowledging ? 2.6 : speaking ? 5 : 3.4;
+    // Head springs: while nodding they only bring the head back to level.
+    const omega = nodding ? 4 : speaking ? 5 : 3.4;
     const tilt = this.head.tilt.step(base.tilt + gesture.tilt, dt, omega);
     const rise = this.head.rise.step(base.rise + gesture.rise, dt, omega);
     const turn = this.head.turn.step(base.turn + gesture.turn, dt, omega);
 
     // Never perfectly still: slow drift on incommensurate periods.
-    const lively = speaking ? 1.4 : 1;
+    const lively = (speaking ? 1.4 : 1) * calm;
     const microTilt = lively * (0.45 * Math.sin(t * 0.41) + 0.25 * Math.sin(t * 1.07 + 1.1));
     const microRise = lively * 0.0015 * Math.sin(t * 0.53 + 0.4) - (speaking ? 0.0025 * this.energy : 0);
     const microTurn = lively * 0.0014 * Math.sin(t * 0.29 + 2);
 
     const sinceNod = t - this.nodStartedAt;
-    const nod = sinceNod < this.nodLength ? this.nodAmp * Math.sin((Math.PI * sinceNod) / this.nodLength) : 0;
+    const depth = this.ackDepth();
+    const nod = (sinceNod < this.nodLength ? this.nodAmp * Math.sin((Math.PI * sinceNod) / this.nodLength) : 0) + ACK_DROP * depth;
 
     const breathPeriod = speaking ? 3.4 : 4.4;
     const clamp = (v: number, limit: number) => Math.max(-limit, Math.min(limit, v));
@@ -254,9 +268,9 @@ export class AvatarMotion {
       rise: clamp(rise + microRise, LIMITS.rise),
       turn: clamp(turn + microTurn, LIMITS.turn),
       nod: clamp(nod, LIMITS.nod),
-      pitch: clamp(ACK_PITCH * this.ackDepth(), LIMITS.pitch),
-      breath: Math.sin((2 * Math.PI * t) / breathPeriod),
-      sway: 0.35 * Math.sin(t * 0.19 + 0.7),
+      pitch: clamp(ACK_PITCH * depth, LIMITS.pitch),
+      breath: calm * Math.sin((2 * Math.PI * t) / breathPeriod),
+      sway: calm * 0.35 * Math.sin(t * 0.19 + 0.7),
       blink,
     };
   }

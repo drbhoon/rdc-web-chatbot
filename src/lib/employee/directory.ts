@@ -279,11 +279,13 @@ export function extractEmployeeName(message: string): string | null {
 /** Exported for tests: RDC's leaders are public and answered from the facts of record. */
 export function isLeaderName(name: string): boolean {
   const query = normalizeName(name).split(" ").filter((t) => t && t !== "dr" && t !== "mr");
+  const long = query.filter((t) => t.length >= 3);
   return LEADER_NAMES.some((leader) => {
     const tokens = normalizeName(leader).split(" ").filter((t) => t && t !== "dr");
-    const long = tokens.filter((t) => t.length >= 3);
-    if (!long.length || !long.every((t) => query.includes(t))) return false;
-    // "Rajesh" alone could be anyone; "Rajesh N" or "Adnan Khan" is the leader.
+    // The surname must be there and every other word must belong to the
+    // leader: "Adnan Khan" and "Rajesh N" are leaders, "Rajesh" or "Anil
+    // Kumar" alone could be anyone.
+    if (!long.length || !query.includes(tokens.at(-1)!) || !long.every((t) => tokens.includes(t))) return false;
     return long.length >= 2 || query.length === tokens.length;
   });
 }

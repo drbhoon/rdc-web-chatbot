@@ -11,7 +11,16 @@
     "name": "RDC Tara",
     "whatsapp": "+91 86579 40541",
     "link": "https://wa.me/918657940541",
-    "handles": "booking a concrete order, raising a complaint, or asking a question, 24x7"
+    "handles": "taking and scheduling concrete orders, keeping customers updated on their orders, answering real-time questions such as where is my order (with a link to watch the transit mixers coming to the site live), complaints and any other question, with chat history, 24x7"
+  },
+  "name": {
+    "origin": "Research & Development Corporation, of Singapore, RDC's founding partner",
+    "today": "ReaDymix Concrete",
+    "line": "the name says it all"
+  },
+  "volume": {
+    "perPlantPerMonth": 3500,
+    "targetPerPlantPerMonth": 4000
   },
   "founded": {
     "year": 1993,
@@ -19,17 +28,18 @@
   },
   "leadership": {
     "asOf": "2026-10-11",
+    "namesFrom": "the HR portal employee master",
     "executives": [
-      { "name": "Anil Banchhor", "role": "Chief Executive Officer (CEO)", "about": "over 30 years in ready-mix concrete and an acknowledged corporate leader" },
+      { "name": "Anil Kumar Banchhor", "role": "Chief Executive Officer (CEO)", "about": "over 30 years in ready-mix concrete and an acknowledged corporate leader" },
       { "name": "Dr K S Bhoon", "role": "Chief Operating Officer (COO)", "about": "an Indian Army veteran (Brigadier) with a PhD from IIT Delhi" },
       { "name": "Manish Modani", "role": "Chief Financial Officer (CFO)", "about": "a Chartered Accountant with over 20 years in finance" }
     ],
     "businessHeads": [
-      { "name": "Adnan Khan", "leads": "West and Central" },
+      { "name": "Mohammad Adnan Khan", "leads": "West and Central" },
       { "name": "Japjit Singh", "leads": "North" },
-      { "name": "D K Jaiswal", "leads": "East" },
+      { "name": "Dharmendra Kumar Jaiswal", "leads": "East" },
       { "name": "Naresh Chundoori", "leads": "Andhra Pradesh, Telangana, Odisha and Jharkhand" },
-      { "name": "Durai Baskaran", "leads": "Karnataka" },
+      { "name": "Baskaran D", "leads": "Karnataka" },
       { "name": "Rajesh N", "leads": "Tamil Nadu" },
       { "name": "Pretheesh Sukumaran", "leads": "Kerala" },
       { "name": "Mangesh Garud", "leads": "Pune" }

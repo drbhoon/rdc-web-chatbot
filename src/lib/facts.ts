@@ -41,6 +41,8 @@ export function factsOfRecord(): string {
   const dedicated = facts.plants.total - facts.plants.commercial;
   return [
     `- Founded: ${facts.founded.year}, when ${facts.founded.story}.`,
+    `- The name: RDC first stood for ${facts.name.origin}. Today RDC stands for ${facts.name.today} — ${facts.name.line}. Say this when asked what RDC stands for or means.`,
+    `- Volume: RDC's plants average about ${facts.volume.perPlantPerMonth.toLocaleString("en-IN")} m³ of concrete per plant a month, and RDC aims to raise this to ${facts.volume.targetPerPlantPerMonth.toLocaleString("en-IN")} m³ per plant a month. Share these averages; RDC does not publish figures for individual plants or customers.`,
     leadership(),
     `- Official website: ${facts.website} (never quote any other RDC website).`,
     `- Head office: ${facts.headOffice.address}. Phone for calls: ${facts.headOffice.phone}.`,
