@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ReplyParser, parseReply } from "../src/lib/ai/replyParser";
+import { ReplyParser, parseReply, spokenSummary } from "../src/lib/ai/replyParser";
 import { keepBrandNamesInEnglish } from "../src/lib/ai/aiService";
 
 /** Feeds a reply in small, awkward pieces, as a stream does. */
@@ -47,4 +47,19 @@ test("a reply without a spoken line is written in full and has no SAY", () => {
   assert.equal(plain.text, "RMC is made in a plant and delivered ready to pour. It is more consistent.");
   assert.equal(parseReply("[[").text, "[[");
   assert.deepEqual(parseReply("Hi"), {say: null, text: "Hi", unanswered: false});
+});
+
+test("an approved answer read word for word is spoken whole when short, summarised when it is a list", () => {
+  assert.equal(
+    spokenSummary("Prices depend on the grade. Message RDC Tara on WhatsApp at +91 86579 40541 (https://wa.me/918657940541), available 24x7.", "en"),
+    "Prices depend on the grade. Message RDC Tara on WhatsApp at +91 86579 40541, available 24x7.",
+  );
+  assert.equal(
+    spokenSummary("RDC is led by a competent team of professionals:\n\n- **Anil Banchhor**, CEO.\n- **Manish Modani**, CFO.", "en"),
+    "RDC is led by a competent team of professionals. The details are in the answer box.",
+  );
+  assert.equal(
+    spokenSummary("RDC was established in 1993. A brief overview:\n\n- **Foundation**: the first RMC plant.", "en"),
+    "RDC was established in 1993. The details are in the answer box.",
+  );
 });

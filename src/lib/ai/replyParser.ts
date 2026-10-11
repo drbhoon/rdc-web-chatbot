@@ -111,3 +111,16 @@ export function parseReply(full: string, clean: (text: string) => string = (t) =
   parser.finish();
   return { say: parser.spoken, text: parser.text, unanswered: parser.unanswered };
 }
+
+/**
+ * What to say aloud for an answer written without a SAY line (an approved
+ * answer returned word for word): a short answer whole; a list or a long
+ * answer by its first sentence and a pointer to the answer box.
+ */
+export function spokenSummary(text: string, language: string): string {
+  const plain = text.replace(/\*\*|__|`/g, "").replace(/\(?https?:\/\/[^\s)]+\)?/g, "").replace(/\s+([,.])/g, "$1").trim();
+  if (!/^\s*(?:[-*•]|\d+\.)\s/m.test(plain) && plain.length <= 300) return plain;
+  const line = plain.split("\n")[0].trim();
+  const first = (line.match(/^.*?[.!?।](?=\s|$)/)?.[0] ?? line).replace(/:$/, ".");
+  return `${first} ${language === "hi" ? "पूरी जानकारी answer box में है।" : "The details are in the answer box."}`;
+}

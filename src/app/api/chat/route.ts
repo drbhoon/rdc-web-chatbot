@@ -14,7 +14,8 @@ import {
 import { normalizeQueryForRetrieval, type NormalizedQuery } from "@/lib/i18n/queryNormalizer";
 import { classifyIntent } from "@/lib/intent/classifier";
 import { retrieveRelevantChunks, APPROVED_CATEGORY, type RetrievedChunk } from "@/lib/knowledge/retrieval";
-import { generateAIResponse, suggestsTara, type ReplyEvents } from "@/lib/ai/aiService";
+import { generateAIResponse, suggestsTara, whatsAppReferral, type ReplyEvents } from "@/lib/ai/aiService";
+import { spokenSummary } from "@/lib/ai/replyParser";
 import { performWebSearch, shouldUseWebSearch } from "@/lib/search/webSearch";
 import { handleEmployeeDirectoryMessage } from "@/lib/employee/directory";
 import { approvedAnswerFor, recordUnanswered } from "@/lib/knowledge/unanswered";
@@ -281,10 +282,10 @@ export async function POST(req: NextRequest) {
   // ── 8. Generate AI Response ────────────────────────────────────────────────
   const answer = async (events?: ReplyEvents): Promise<ChatResponse> => {
   const aiResult = verbatim ? {
-    content: approved!.answer, confidence: 1, usedMockMode: false, suggestLeadCapture: suggestsTara(classification.intent), unanswered: false, provider: "approved",
+    content: approved!.answer, speech: spokenSummary(approved!.answer, detectedLanguage), confidence: 1, usedMockMode: false, suggestLeadCapture: suggestsTara(classification.intent), unanswered: false, provider: "approved",
   } : retrievalFailed ? {
-    content: detectedLanguage === "hi" ? "अभी जानकारी की पुष्टि नहीं कर पा रही हूं। आपका प्रश्न समीक्षा के लिए दर्ज किया गया है।" : "I cannot check the knowledge base right now. Your question has been recorded for review.",
-    confidence: 0, usedMockMode: false, suggestLeadCapture: false, unanswered: true, provider: "unavailable",
+    content: (detectedLanguage === "hi" ? "अभी जानकारी की पुष्टि नहीं कर पा रही हूं। आपका प्रश्न समीक्षा के लिए दर्ज किया गया है।" : "I cannot check the knowledge base right now. Your question has been recorded for review.") + `\n\n${whatsAppReferral(detectedLanguage)}`,
+    confidence: 0, usedMockMode: false, suggestLeadCapture: true, unanswered: true, provider: "unavailable",
   } : await generateAIResponse({
     userMessage: message,
     retrievalQuery: normalizedQuery.retrievalQuery,
