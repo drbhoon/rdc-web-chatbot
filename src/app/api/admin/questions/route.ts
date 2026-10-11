@@ -1,7 +1,8 @@
 import { requireAdmin } from "@/lib/admin/auth";
 import { prisma } from "@/lib/db";
 import { exportReview, parseReview } from "@/lib/knowledge/reviewWorkbook";
-import { embedTexts, vectorLiteral, EMBEDDING_MODEL } from "@/lib/knowledge/embeddings";
+import { embedTexts } from "@/lib/knowledge/embeddings";
+import { approvedEmbeddingText, saveApprovedChunk } from "@/lib/knowledge/approved";
 import { istDate } from "@/lib/review/pairs";
 
 export async function GET(req: Request) {
@@ -29,17 +30,13 @@ export async function POST(req: Request) {
     });
     if (!changes.length) return Response.json({published: 0, skipped: rows.length});
     const vectors: number[][] = [];
-    for (let i = 0; i < changes.length; i += 32) vectors.push(...await embedTexts(changes.slice(i, i + 32).map(r => `Question: ${existing.find(e => e.id === r.id)!.question}\nAnswer: ${r.answer}`)));
+    for (let i = 0; i < changes.length; i += 32) vectors.push(...await embedTexts(changes.slice(i, i + 32).map(r => approvedEmbeddingText(existing.find(e => e.id === r.id)!.question, r.answer))));
     await prisma.$transaction(async tx => {
       for (let i = 0; i < changes.length; i++) {
         const row = changes[i]; const saved = existing.find(e => e.id === row.id)!;
         const changed = await tx.unansweredQuestion.updateMany({where: {id: row.id, version: row.version}, data: {answer: row.answer, status: "answered", answeredAt: new Date(), version: {increment: 1}}});
         if (changed.count !== 1) throw new Error("Concurrent update detected. Download a fresh workbook.");
-        const docId = `review-${row.id}`; const chunkId = `${docId}-0`;
-        const content = `Question: ${saved.question}\nApproved answer: ${row.answer}`;
-        await tx.knowledgeDocument.upsert({where: {id: docId}, create: {id: docId, title: saved.question, category: "approved_answers", sourceType: "faq", sourceName: "Administrator reviewed answer", tags: '["reviewed"]'}, update: {isActive: true, lastUpdated: new Date()}});
-        await tx.knowledgeChunk.upsert({where: {id: chunkId}, create: {id: chunkId, documentId: docId, chunkIndex: 0, content, metadata: JSON.stringify({embeddingModel: EMBEDDING_MODEL})}, update: {content}});
-        await tx.$executeRaw`UPDATE knowledge_chunks SET vector = ${vectorLiteral(vectors[i])}::vector WHERE id = ${chunkId}`;
+        await saveApprovedChunk(tx, row.id, saved.question, row.answer, vectors[i]);
       }
     }, {timeout: 60000});
     return Response.json({published: changes.length, skipped: rows.length - changes.length});

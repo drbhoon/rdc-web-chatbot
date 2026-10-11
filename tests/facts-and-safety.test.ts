@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "fs";
 import { FACTS, PLANT_LOCATIONS, factsOfRecord } from "../src/lib/facts";
 import { rateLimitedKey } from "../src/lib/rateLimit";
-import { bareEmployeeName, extractEmployeeName } from "../src/lib/employee/directory";
-import { keepBrandNamesInEnglish, withoutDiscontinued } from "../src/lib/ai/aiService";
+import { bareEmployeeName, extractEmployeeName, isEmployeeContactRequest, isLeaderName } from "../src/lib/employee/directory";
+import { keepBrandNamesInEnglish, mentionsTaraNumber, whatsAppReferral, withoutDiscontinued } from "../src/lib/ai/aiService";
 
 test("facts of record: the official website, numbers and plant count RDC gave", () => {
   const block = factsOfRecord();
@@ -16,6 +16,27 @@ test("facts of record: the official website, numbers and plant count RDC gave", 
   assert.match(block, /113 commercial plants and 28 dedicated plants/);
   assert.match(block, /21 states, 2 union territories and 53 cities/);
   assert.doesNotMatch(block, /rdcconcrete/);
+  assert.match(block, /Founded: 1993/);
+});
+
+test("leadership is public: every EXCO member is in the facts of record, without the word region", () => {
+  const block = factsOfRecord();
+  for (const name of ["Anil Banchhor", "Dr K S Bhoon", "Manish Modani", "Adnan Khan", "Japjit Singh", "D K Jaiswal",
+    "Naresh Chundoori", "Durai Baskaran", "Rajesh N", "Pretheesh Sukumaran", "Mangesh Garud", "Avijit Chaubey"]) assert.ok(block.includes(name), name);
+  assert.equal(FACTS.leadership.businessHeads.length, 8);
+  assert.doesNotMatch(block, /region/i);
+  // Asked by name, a leader is answered from these facts, not the employee directory.
+  assert.ok(isLeaderName("Anil Banchhor") && isLeaderName("Dr Bhoon") === false && isLeaderName("Adnan Khan") && isLeaderName("Rajesh N"));
+  assert.equal(isLeaderName("Rajesh"), false, "a common first name alone could be anyone");
+  assert.equal(isLeaderName("Asha Example"), false);
+});
+
+test("an unanswered question ends with RDC Tara's WhatsApp number", () => {
+  assert.match(whatsAppReferral("en"), /\+91 86579 40541/);
+  assert.match(whatsAppReferral("hi"), /\+91 86579 40541/);
+  assert.ok(mentionsTaraNumber("Message RDC Tara on +91 86579 40541."));
+  assert.ok(mentionsTaraNumber("WhatsApp 8657940541"));
+  assert.equal(mentionsTaraNumber("Call the head office on +91 22 6789 6789."), false);
 });
 
 test("plant knowledge: every commercial plant, the count of record, nothing on dedicated plants", () => {
@@ -79,6 +100,22 @@ test("employee lookups start only from an explicit request for a person", () => 
   assert.equal(extractEmployeeName("411045"), null);
   // Company topics stay company topics.
   assert.equal(extractEmployeeName("Tell me about Vision 2030"), null);
+  // "at RDC" says where the person works (asked on 2026-10-10 and missed).
+  assert.equal(extractEmployeeName("Can you tell me about the employee Kanhaiya at RDC ?"), "Kanhaiya");
+  assert.equal(extractEmployeeName("Tell me about Asha Example of RDC Concrete"), "Asha Example");
+  assert.equal(extractEmployeeName("Who is Kanhaiya at RDC?"), "Kanhaiya");
+  assert.equal(extractEmployeeName("Tell me about products of RDC"), null);
+  assert.equal(extractEmployeeName("Tell me about ready mix of RDC"), null);
+  assert.equal(extractEmployeeName("Who is the CEO of RDC?"), null);
+  assert.equal(extractEmployeeName("Can you tell me about RDC Management? who are key persons?"), null);
+});
+
+test("asking for an employee's phone, e-mail or address gets the directory offer, not the model", () => {
+  assert.ok(isEmployeeContactRequest("Tell me his email id and phone no"));
+  assert.ok(isEmployeeContactRequest("Can you provide the personal mobile number or  home address of some of the employees?"));
+  assert.equal(isEmployeeContactRequest("What is the head office phone number?"), false);
+  assert.equal(isEmployeeContactRequest("Give me the address of the Kalyan plant"), false);
+  assert.equal(isEmployeeContactRequest("How many employees does RDC have?"), false);
 });
 
 test("a message that is just a name is a lookup; greetings, places and products are not", () => {

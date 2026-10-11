@@ -19,10 +19,29 @@ export const PLANT_LOCATIONS = plantLocations.locations;
 
 export const TARA_WHATSAPP_LINK = facts.tara.link;
 
+/** RDC's leadership (EXCO) by name: public, and answered from here, not the employee directory. */
+export const LEADER_NAMES = [
+  ...facts.leadership.executives.map((p) => p.name),
+  ...facts.leadership.businessHeads.map((p) => p.name),
+  facts.leadership.technical.name,
+];
+
+/** The leadership line of the facts of record. */
+function leadership(): string {
+  const { executives, businessHeads, technical } = facts.leadership;
+  return [
+    `- Leadership (the EXCO, public): ${executives.map((p) => `${p.role} ${p.name}, ${p.about}`).join("; ")}.`,
+    `  ${businessHeads.length} Business Heads: ${businessHeads.map((p) => `${p.name} (${p.leads})`).join(", ")}. ${technical.role}: ${technical.name}.`,
+    `  The areas in brackets are the Business Heads' titles: use them only to say who leads which business, never to describe where RDC operates.`,
+  ].join("\n");
+}
+
 /** The block placed at the top of every answer's instructions. */
 export function factsOfRecord(): string {
   const dedicated = facts.plants.total - facts.plants.commercial;
   return [
+    `- Founded: ${facts.founded.year}, when ${facts.founded.story}.`,
+    leadership(),
     `- Official website: ${facts.website} (never quote any other RDC website).`,
     `- Head office: ${facts.headOffice.address}. Phone for calls: ${facts.headOffice.phone}.`,
     `- ${facts.tara.name} is RDC's WhatsApp assistant on ${facts.tara.whatsapp} (${facts.tara.link}), for ${facts.tara.handles}.`,

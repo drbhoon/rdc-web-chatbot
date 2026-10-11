@@ -2,7 +2,7 @@ import { loadEmployees } from "@/lib/employee/workbook";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
 import { prisma } from "@/lib/db";
-import { PLANT_LOCATIONS } from "@/lib/facts";
+import { LEADER_NAMES, PLANT_LOCATIONS } from "@/lib/facts";
 
 const EMPLOYEE_LOOKUP_PATTERNS = [
   /\btell me about\s+([a-z][a-z .'-]{2,})/i,
@@ -27,6 +27,8 @@ const COMPANY_TOPIC_PATTERN =
 const OTP_PATTERN = /^\s*(\d{6})\s*[.。।,!?]?\s*$/;
 
 const MAX_EMPLOYEE_LOOKUPS_PER_CODE = 10;
+/** How long a code or a Google sign-in keeps this chat verified. */
+const VERIFIED_FOR_MS = 8 * 60 * 60 * 1000;
 
 // Verification e-mails go to any @rdc.in address a visitor types, so without a
 // cap one visitor could fill a colleague's inbox with RDC-branded codes.
@@ -248,19 +250,62 @@ function isPossibleSingleEmployeeName(name: string): boolean {
   return true;
 }
 
+// "the employee Kanhaiya at RDC": RDC named after a person is where they
+// work, not the topic of the question.
+const AT_RDC = /\s+(?:at|in|of|from|with)\s+(?:the\s+)?rdc(?:\s+(?:concrete|india|limited|ltd))*\.?(?=\s*[?.!।]*\s*$)/i;
+
 /** Exported for tests. */
 export function extractEmployeeName(message: string): string | null {
-  if (isEmployeeNegation(message) || isCompanyTopic(message)) return null;
+  if (isEmployeeNegation(message)) return null;
+  const subject = message.replace(AT_RDC, "");
+  if (isCompanyTopic(subject)) return null;
+  // "Tell me about products of RDC" is about the company: after "at RDC" a
+  // single word counts as a name only when the question is about a person.
+  const atRdc = subject !== message;
+  const personAsked = hasEmployeeLookupIntent(subject) || /\bwho\s+is\b/i.test(subject);
 
   for (const pattern of EMPLOYEE_LOOKUP_PATTERNS) {
-    const match = message.match(pattern);
+    const match = subject.match(pattern);
     const rawName = match?.[1]?.trim();
     if (!rawName) continue;
 
     const name = cleanEmployeeName(rawName);
+    if (atRdc && !personAsked && !bareEmployeeName(name)) continue;
     if (isLikelyEmployeeName(name) || isPossibleSingleEmployeeName(name)) return name;
   }
   return null;
+}
+
+/** Exported for tests: RDC's leaders are public and answered from the facts of record. */
+export function isLeaderName(name: string): boolean {
+  const query = normalizeName(name).split(" ").filter((t) => t && t !== "dr" && t !== "mr");
+  return LEADER_NAMES.some((leader) => {
+    const tokens = normalizeName(leader).split(" ").filter((t) => t && t !== "dr");
+    const long = tokens.filter((t) => t.length >= 3);
+    if (!long.length || !long.every((t) => query.includes(t))) return false;
+    // "Rajesh" alone could be anyone; "Rajesh N" or "Adnan Khan" is the leader.
+    return long.length >= 2 || query.length === tokens.length;
+  });
+}
+
+// Asking for an employee's phone, e-mail or address, with or without a name.
+const CONTACT_PATTERN = /\b(?:phone|mobile|cell|contact|e-?mail|address|number)\b|फ़ोन|फोन|मोबाइल|नंबर|पता|ईमेल/i;
+const PERSON_PATTERN = /\b(?:employees?|staff|colleagues?|his|her|him)\b|कर्मचारी|एम्पलाई|उनका|उसका|उनकी|उसकी/i;
+
+/** Exported for tests. */
+export function isEmployeeContactRequest(message: string): boolean {
+  return CONTACT_PATTERN.test(message) && PERSON_PATTERN.test(message) && !isEmployeeNegation(message);
+}
+
+function contactReply(language: string, signedIn: boolean): string {
+  if (language === "hi") {
+    return signedIn
+      ? `मैं किसी का personal phone number, e-mail ID या घर का पता share नहीं करती. आप RDC ID से signed in हैं, इसलिए मैं किसी RDC colleague की work details (designation और location) दिखा सकती हूं: बस उनका पूरा नाम लिखें, जैसे “Tell me about Asha Rao”. आप ${MAX_EMPLOYEE_LOOKUPS_PER_CODE} colleagues तक देख सकते हैं.`
+      : `मैं किसी का personal phone number, e-mail ID या घर का पता share नहीं करती. अगर आप RDC employee हैं, तो मैं ${MAX_EMPLOYEE_LOOKUPS_PER_CODE} employees तक की work details (designation और location) दिखा सकती हूं. कृपया अपनी @rdc.in e-mail ID लिखें: मैं एक code भेजूंगी, उसे यहां enter करें और फिर employee का पूरा नाम लिखें.`;
+  }
+  return signedIn
+    ? `I can't share anyone's personal phone number, e-mail ID or home address. As you are signed in with your RDC ID, I can show an RDC colleague's work details (designation and location): type their full name, for example “Tell me about Asha Rao”. You can look up to ${MAX_EMPLOYEE_LOOKUPS_PER_CODE} colleagues.`
+    : `I can't share anyone's personal phone number, e-mail ID or home address. If you are an RDC employee, I can show a colleague's work details (designation and location) for up to ${MAX_EMPLOYEE_LOOKUPS_PER_CODE} employees. Please type your @rdc.in e-mail ID: I will send you a code to enter here, then type the person's full name.`;
 }
 
 // A message that is nothing but a name ("Asha Example") is a lookup too. The
@@ -475,6 +520,7 @@ async function employeeLookupCountForCode(auth: VerifiedEmployeeAuth): Promise<n
     where: {
       sessionId: auth.sessionId,
       email: auth.email,
+      employeeName: { not: "" },
       verifiedAt: { not: null },
       expiresAt: auth.expiresAt,
     },
@@ -555,10 +601,24 @@ export async function handleEmployeeDirectoryMessage(
       };
     }
 
+    // A verification lasts a working day in this chat, as a sign-in does.
     await prisma.employeeOtp.update({
       where: { id: pending.id },
-      data: { verifiedAt: new Date() },
+      data: { verifiedAt: new Date(), expiresAt: new Date(Date.now() + VERIFIED_FOR_MS) },
     });
+
+    // Verified before naming anyone ("give me your e-mail first"): ask for the name.
+    if (!pending.employeeName) {
+      return {
+        handled: true,
+        message:
+          language === "hi"
+            ? `धन्यवाद, आप verified हैं. अब employee का पूरा नाम लिखें, जैसे “Tell me about Asha Rao”. आप ${MAX_EMPLOYEE_LOOKUPS_PER_CODE} employees तक देख सकते हैं.`
+            : `Thank you, you are verified. Now type the employee's full name, for example “Tell me about Asha Rao”. You can look up to ${MAX_EMPLOYEE_LOOKUPS_PER_CODE} employees.`,
+        eventType: "employee_otp_verified",
+        metadata: { requesterEmail: pending.email },
+      };
+    }
 
     const employee = await findEmployee(pending.employeeName);
     return {
@@ -576,7 +636,7 @@ export async function handleEmployeeDirectoryMessage(
 
   if (isRepeatEmployeeInfoRequest(message)) {
     const verified = await latestVerifiedOtp(sessionId);
-    if (verified) {
+    if (verified?.employeeName) {
       const employee = await findEmployee(verified.employeeName);
       return {
         handled: true,
@@ -597,17 +657,23 @@ export async function handleEmployeeDirectoryMessage(
 
   const email = extractRdcEmail(message);
   if (email) {
-    const pending = await latestPendingOtp(sessionId);
-    if (!pending) {
+    if (signedInEmail && EMAIL_PATTERN.test(signedInEmail)) {
       return {
         handled: true,
         message:
           language === "hi"
-            ? "धन्यवाद. कृपया पहले employee के बारे में पूछें, जैसे: “Tell me about <employee name>”."
-            : "Thanks. Please first ask for an employee, for example: “Tell me about <employee name>”.",
-        eventType: "employee_email_without_lookup",
+            ? `आप पहले से ${signedInEmail} से signed in हैं, code की ज़रूरत नहीं. बस employee का पूरा नाम लिखें, जैसे “Tell me about Asha Rao”.`
+            : `You are already signed in as ${signedInEmail}, so no code is needed. Just type the employee's full name, for example “Tell me about Asha Rao”.`,
+        eventType: "employee_email_signed_in",
       };
     }
+    // An e-mail before any name starts a verification with no name yet: the
+    // code then unlocks lookups by name.
+    const pending =
+      (await latestPendingOtp(sessionId)) ??
+      (await prisma.employeeOtp.create({
+        data: { sessionId, employeeName: "", expiresAt: new Date(Date.now() + 10 * 60 * 1000) },
+      }));
 
     const since = (ms: number) => new Date(Date.now() - ms);
     const [sentToAddress, sentInChat] = await Promise.all([
@@ -671,7 +737,12 @@ export async function handleEmployeeDirectoryMessage(
   const activeAuth = await latestActiveVerifiedEmployeeAuth(sessionId);
   const explicitName = extractEmployeeName(message);
   const employeeName = explicitName || bareEmployeeName(message, Boolean(activeAuth));
-  if (!employeeName) return { handled: false };
+  if (!employeeName) {
+    if (!isEmployeeContactRequest(message)) return { handled: false };
+    const signedIn = Boolean(activeAuth) || Boolean(signedInEmail && EMAIL_PATTERN.test(signedInEmail));
+    return { handled: true, message: contactReply(language, signedIn), eventType: "employee_contact_requested" };
+  }
+  if (isLeaderName(employeeName)) return { handled: false };
 
   if (activeAuth) {
     const lookupCount = await employeeLookupCountForCode(activeAuth);
@@ -698,7 +769,7 @@ export async function handleEmployeeDirectoryMessage(
   // It opens the same 10-lookup allowance a code would, for a working day.
   if (!activeAuth && signedInEmail && EMAIL_PATTERN.test(signedInEmail)) {
     await prisma.employeeOtp.create({
-      data: {sessionId, employeeName, email: signedInEmail, verifiedAt: new Date(), expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000)},
+      data: {sessionId, employeeName, email: signedInEmail, verifiedAt: new Date(), expiresAt: new Date(Date.now() + VERIFIED_FOR_MS)},
     });
     const employee = await findEmployee(employeeName);
     return {

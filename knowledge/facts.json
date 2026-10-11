@@ -13,6 +13,29 @@
     "link": "https://wa.me/918657940541",
     "handles": "booking a concrete order, raising a complaint, or asking a question, 24x7"
   },
+  "founded": {
+    "year": 1993,
+    "story": "RDC set up India's first commercial ready-mix concrete plant, in Mumbai"
+  },
+  "leadership": {
+    "asOf": "2026-10-11",
+    "executives": [
+      { "name": "Anil Banchhor", "role": "Chief Executive Officer (CEO)", "about": "over 30 years in ready-mix concrete and an acknowledged corporate leader" },
+      { "name": "Dr K S Bhoon", "role": "Chief Operating Officer (COO)", "about": "an Indian Army veteran (Brigadier) with a PhD from IIT Delhi" },
+      { "name": "Manish Modani", "role": "Chief Financial Officer (CFO)", "about": "a Chartered Accountant with over 20 years in finance" }
+    ],
+    "businessHeads": [
+      { "name": "Adnan Khan", "leads": "West and Central" },
+      { "name": "Japjit Singh", "leads": "North" },
+      { "name": "D K Jaiswal", "leads": "East" },
+      { "name": "Naresh Chundoori", "leads": "Andhra Pradesh, Telangana, Odisha and Jharkhand" },
+      { "name": "Durai Baskaran", "leads": "Karnataka" },
+      { "name": "Rajesh N", "leads": "Tamil Nadu" },
+      { "name": "Pretheesh Sukumaran", "leads": "Kerala" },
+      { "name": "Mangesh Garud", "leads": "Pune" }
+    ],
+    "technical": { "name": "Avijit Chaubey", "role": "Head – Technical" }
+  },
   "footprint": {
     "states": 21,
     "unionTerritories": 2,
