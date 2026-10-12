@@ -146,3 +146,20 @@ test("a message that is just a name is a lookup; greetings, places and products 
   assert.equal(bareEmployeeName("Hello", true), null);
   assert.equal(bareEmployeeName("Hadapsar", true), null);
 });
+
+test("Sanchita (Sarvam) speaks English and Hindi when configured; RDC is left for her to say", async () => {
+  const { sarvamInput, usesSarvam } = await import("../src/lib/voice/sarvam");
+  const saved = { key: process.env.SARVAM_API_KEY, provider: process.env.TTS_PROVIDER };
+  process.env.SARVAM_API_KEY = "test-key";
+  delete process.env.TTS_PROVIDER;
+  assert.ok(usesSarvam("en") && usesSarvam("hi"));
+  assert.equal(usesSarvam("ta"), false, "other languages keep the OpenAI voice");
+  process.env.TTS_PROVIDER = "openai";
+  assert.equal(usesSarvam("en"), false, "TTS_PROVIDER=openai switches her back");
+  delete process.env.SARVAM_API_KEY;
+  delete process.env.TTS_PROVIDER;
+  assert.equal(usesSarvam("en"), false, "no key, no Sarvam");
+  Object.assign(process.env, saved.key ? { SARVAM_API_KEY: saved.key } : {}, saved.provider ? { TTS_PROVIDER: saved.provider } : {});
+  assert.equal(sarvamInput("**RDC** and TARA Online", "en"), "RDC and Taara Online");
+  assert.equal(sarvamInput("RDC और TARA", "hi"), "RDC और तारा");
+});

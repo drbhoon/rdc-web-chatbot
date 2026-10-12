@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimited, rateLimitedKey } from "@/lib/rateLimit";
 import { speechInput, speechInstructions } from "@/lib/voice/speechInstructions";
+import { sarvamSpeech, usesSarvam } from "@/lib/voice/sarvam";
 import { loginFromRequest, loginRequired } from "@/lib/auth/rdcLogin";
 
 const LANGUAGE_NAMES: Record<string, string> = {
@@ -28,11 +29,6 @@ export async function POST(request: NextRequest) {
   if (login ? rateLimitedKey(`tts-user:${login.email}`, 120) : rateLimited(request, "tts", 240)) {
     return NextResponse.json({ error: "Please try again in one minute." }, { status: 429 });
   }
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!apiKey) {
-    return NextResponse.json({ error: "Natural voice is not configured" }, { status: 503 });
-  }
-
   let payload: { text?: unknown; language?: unknown };
   try {
     payload = await request.json();
@@ -46,6 +42,22 @@ export async function POST(request: NextRequest) {
 
   const languageCode = typeof payload.language === "string" ? payload.language : "en";
   const language = LANGUAGE_NAMES[languageCode] || LANGUAGE_NAMES.en;
+
+  // Sanchita (Sarvam) where configured; the OpenAI voice below if Sarvam
+  // fails, so TARA is never silent because of it.
+  if (usesSarvam(languageCode)) {
+    try {
+      const audio = await sarvamSpeech(payload.text, languageCode);
+      return new Response(audio as BodyInit, {status: 200, headers: {"Content-Type": "audio/mpeg", "Cache-Control": "no-store", "X-Tara-Voice": "sarvam"}});
+    } catch (error) {
+      console.error("Sarvam TTS failed; using the OpenAI voice:", error);
+    }
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) {
+    return NextResponse.json({ error: "Natural voice is not configured" }, { status: 503 });
+  }
   const input = speechInput(payload.text, languageCode);
 
   try {
