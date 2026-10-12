@@ -211,7 +211,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ── 6. Retrieve Relevant Knowledge ────────────────────────────────────────
-  const employeeResult = await handleEmployeeDirectoryMessage(message, sessionId!, detectedLanguage, login?.email);
+  const employeeResult = await handleEmployeeDirectoryMessage(message, sessionId!, detectedLanguage);
   if (employeeResult.handled) {
     const processingMs = Date.now() - startTime;
     await prisma.chatMessage.create({

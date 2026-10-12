@@ -299,14 +299,14 @@ export function isEmployeeContactRequest(message: string): boolean {
   return CONTACT_PATTERN.test(message) && PERSON_PATTERN.test(message) && !isEmployeeNegation(message);
 }
 
-function contactReply(language: string, signedIn: boolean): string {
+function contactReply(language: string, verified: boolean): string {
   if (language === "hi") {
-    return signedIn
-      ? `मैं किसी का personal phone number, e-mail ID या घर का पता share नहीं करती. आप RDC ID से signed in हैं, इसलिए मैं किसी RDC colleague की work details (designation और location) दिखा सकती हूं: बस उनका पूरा नाम लिखें, जैसे “Tell me about Asha Rao”. आप ${MAX_EMPLOYEE_LOOKUPS_PER_CODE} colleagues तक देख सकते हैं.`
+    return verified
+      ? `मैं किसी का personal phone number, e-mail ID या घर का पता share नहीं करती. आप इस chat में verified हैं, इसलिए मैं किसी RDC colleague की work details (designation और location) दिखा सकती हूं: बस उनका पूरा नाम लिखें, जैसे “Tell me about Asha Rao”. एक code से ${MAX_EMPLOYEE_LOOKUPS_PER_CODE} lookups तक हो सकते हैं.`
       : `मैं किसी का personal phone number, e-mail ID या घर का पता share नहीं करती. अगर आप RDC employee हैं, तो मैं ${MAX_EMPLOYEE_LOOKUPS_PER_CODE} employees तक की work details (designation और location) दिखा सकती हूं. कृपया अपनी @rdc.in e-mail ID लिखें: मैं एक code भेजूंगी, उसे यहां enter करें और फिर employee का पूरा नाम लिखें.`;
   }
-  return signedIn
-    ? `I can't share anyone's personal phone number, e-mail ID or home address. As you are signed in with your RDC ID, I can show an RDC colleague's work details (designation and location): type their full name, for example “Tell me about Asha Rao”. You can look up to ${MAX_EMPLOYEE_LOOKUPS_PER_CODE} colleagues.`
+  return verified
+    ? `I can't share anyone's personal phone number, e-mail ID or home address. As you are verified in this chat, I can show an RDC colleague's work details (designation and location): type their full name, for example “Tell me about Asha Rao”. One code allows up to ${MAX_EMPLOYEE_LOOKUPS_PER_CODE} lookups.`
     : `I can't share anyone's personal phone number, e-mail ID or home address. If you are an RDC employee, I can show a colleague's work details (designation and location) for up to ${MAX_EMPLOYEE_LOOKUPS_PER_CODE} employees. Please type your @rdc.in e-mail ID: I will send you a code to enter here, then type the person's full name.`;
 }
 
@@ -554,6 +554,10 @@ function isRepeatEmployeeInfoRequest(message: string): boolean {
   );
 }
 
+function lookupsLeft(left: number, language: string): string {
+  return language === "hi" ? `\n\nइस verification से ${left} lookups बाकी हैं.` : `\n\nLookups left with this verification: ${left}.`;
+}
+
 function employeePrompt(name: string, language: string): string {
   if (language === "hi") {
     return `Employee privacy के लिए कृपया अपनी company email ID दर्ज करें जो @rdc.in पर समाप्त होती हो. Verification code भेजने के बाद मैं ${name} के बारे में available information दिखा दूंगी. एक verification से इस chat में ${MAX_EMPLOYEE_LOOKUPS_PER_CODE} employees तक lookup कर सकते हैं.`;
@@ -566,9 +570,10 @@ export async function handleEmployeeDirectoryMessage(
   message: string,
   sessionId: string,
   language = "en",
-  /** The visitor's Google-verified address, where sign-in is required. */
-  signedInEmail?: string,
 ): Promise<EmployeeDirectoryResult> {
+  // Everyone confirms an @rdc.in address with an e-mailed code, even when
+  // signed in with Google (hr.rdcc.ai): TARA will be public one day, and one
+  // code opens 10 lookups (RDC, 2026-10-12).
   const otpMatch = message.match(OTP_PATTERN);
   // Six digits is also an Indian PIN code, and "which area?" is the bot's own
   // question to a customer. Only treat it as a verification code when this
@@ -625,7 +630,7 @@ export async function handleEmployeeDirectoryMessage(
     const employee = await findEmployee(pending.employeeName);
     return {
       handled: true,
-      message: formatEmployee(employee, language),
+      message: formatEmployee(employee, language) + lookupsLeft(MAX_EMPLOYEE_LOOKUPS_PER_CODE - 1, language),
       eventType: "employee_lookup_completed",
       metadata: {
         employeeName: pending.employeeName,
@@ -659,16 +664,6 @@ export async function handleEmployeeDirectoryMessage(
 
   const email = extractRdcEmail(message);
   if (email) {
-    if (signedInEmail && EMAIL_PATTERN.test(signedInEmail)) {
-      return {
-        handled: true,
-        message:
-          language === "hi"
-            ? `आप पहले से ${signedInEmail} से signed in हैं, code की ज़रूरत नहीं. बस employee का पूरा नाम लिखें, जैसे “Tell me about Asha Rao”.`
-            : `You are already signed in as ${signedInEmail}, so no code is needed. Just type the employee's full name, for example “Tell me about Asha Rao”.`,
-        eventType: "employee_email_signed_in",
-      };
-    }
     // An e-mail before any name starts a verification with no name yet: the
     // code then unlocks lookups by name.
     const pending =
@@ -741,8 +736,7 @@ export async function handleEmployeeDirectoryMessage(
   const employeeName = explicitName || bareEmployeeName(message, Boolean(activeAuth));
   if (!employeeName) {
     if (!isEmployeeContactRequest(message)) return { handled: false };
-    const signedIn = Boolean(activeAuth) || Boolean(signedInEmail && EMAIL_PATTERN.test(signedInEmail));
-    return { handled: true, message: contactReply(language, signedIn), eventType: "employee_contact_requested" };
+    return { handled: true, message: contactReply(language, Boolean(activeAuth)), eventType: "employee_contact_requested" };
   }
   if (isLeaderName(employeeName)) return { handled: false };
 
@@ -753,7 +747,7 @@ export async function handleEmployeeDirectoryMessage(
       const employee = await findEmployee(employeeName);
       return {
         handled: true,
-        message: formatEmployee(employee, language),
+        message: formatEmployee(employee, language) + lookupsLeft(MAX_EMPLOYEE_LOOKUPS_PER_CODE - lookupCount - 1, language),
         eventType: "employee_lookup_completed",
         metadata: {
           employeeName,
@@ -766,22 +760,6 @@ export async function handleEmployeeDirectoryMessage(
     }
   }
 
-  // Signed in with Google as an @rdc.in address (hr.rdcc.ai): that is already
-  // the verification the e-mailed code exists to provide, so look up at once.
-  // It opens the same 10-lookup allowance a code would, for a working day.
-  if (!activeAuth && signedInEmail && EMAIL_PATTERN.test(signedInEmail)) {
-    await prisma.employeeOtp.create({
-      data: {sessionId, employeeName, email: signedInEmail, verifiedAt: new Date(), expiresAt: new Date(Date.now() + VERIFIED_FOR_MS)},
-    });
-    const employee = await findEmployee(employeeName);
-    return {
-      handled: true,
-      message: formatEmployee(employee, language),
-      eventType: "employee_lookup_completed",
-      metadata: {employeeName, requesterEmail: signedInEmail, found: Boolean(employee), verifiedBySignIn: true, remainingLookups: MAX_EMPLOYEE_LOOKUPS_PER_CODE - 1},
-    };
-  }
-
   await prisma.employeeOtp.create({
     data: {
       sessionId,
@@ -789,6 +767,19 @@ export async function handleEmployeeDirectoryMessage(
       expiresAt: new Date(Date.now() + 10 * 60 * 1000),
     },
   });
+
+  // All 10 lookups of this verification used: a new code opens 10 more.
+  if (activeAuth) {
+    return {
+      handled: true,
+      message:
+        language === "hi"
+          ? `इस verification के सभी ${MAX_EMPLOYEE_LOOKUPS_PER_CODE} employee lookups हो चुके हैं. और देखने के लिए अपनी @rdc.in e-mail ID लिखें, मैं नया code भेजूंगी.`
+          : `You have used all ${MAX_EMPLOYEE_LOOKUPS_PER_CODE} employee lookups of this verification. To look up more, type your @rdc.in e-mail ID and I will send a new code.`,
+      eventType: "employee_lookup_limit_reached",
+      metadata: { employeeName, requesterEmail: activeAuth.email },
+    };
+  }
 
   // A bare "name" might be a place or product this list does not know:
   // say how to ask something else instead.
