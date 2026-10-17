@@ -13,6 +13,12 @@
     "link": "https://wa.me/918657940541",
     "handles": "taking and scheduling concrete orders, keeping customers updated on their orders, answering real-time questions such as where is my order (with a link to watch the transit mixers coming to the site live), complaints and any other question, with chat history, 24x7"
   },
+  "emails": {
+    "sales": "sales@rdc.in",
+    "complaints": "customercare@rdc.in",
+    "complaintResponse": "within 24 hours",
+    "careers": "careers@rdc.in"
+  },
   "name": {
     "origin": "Research & Development Corporation, of Singapore, RDC's founding partner",
     "today": "ReaDymix Concrete",

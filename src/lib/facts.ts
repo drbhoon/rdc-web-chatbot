@@ -48,6 +48,7 @@ export function factsOfRecord(): string {
     `- Head office: ${facts.headOffice.address}. Phone for calls: ${facts.headOffice.phone}.`,
     `- ${facts.tara.name} is RDC's WhatsApp assistant on ${facts.tara.whatsapp} (${facts.tara.link}), for ${facts.tara.handles}.`,
     `- Local plant phone numbers are listed on ${facts.contactPage}.`,
+    `- E-mail: sales queries to ${facts.emails.sales}; complaints and refunds to ${facts.emails.complaints} (the team responds ${facts.emails.complaintResponse}); jobs to ${facts.emails.careers}.`,
     `- Presence: RDC serves customers in ${facts.footprint.states} states, ${facts.footprint.unionTerritories} union territories and ${facts.footprint.cities} cities of India.`,
     `- Plants: RDC operates ${facts.plants.total} ready-mix concrete plants as on ${facts.asOf} — ${facts.plants.commercial} commercial plants and ${dedicated} dedicated plants built for specific customer projects.`,
     `- Commercial plant locations (plants in each): ${PLANT_LOCATIONS.map((l) => `${l.name} (${l.plants})`).join(", ")}.`,
