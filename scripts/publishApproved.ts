@@ -10,16 +10,17 @@
  *
  * --if-unanswered leaves alone any question that already has a published
  * answer. hr.rdcc.ai runs it that way on every start, so the answers arrive
- * with a deploy but never overwrite one a reviewer uploaded since.
+ * with a deploy but never overwrite one a reviewer uploaded since. The one
+ * exception: an entry may list in "replaces" the earlier texts it supersedes
+ * (ones shipped here before); a published answer that is exactly one of those
+ * is updated, since no reviewer has changed it.
  */
 import { readdirSync, readFileSync, statSync } from "fs";
 import path from "path";
 import { prisma } from "@/lib/db";
 import { embedTexts } from "@/lib/knowledge/embeddings";
-import { approvedEmbeddingText, saveApprovedChunk } from "@/lib/knowledge/approved";
+import { approvedEmbeddingText, needsPublishing, saveApprovedChunk, type Approved } from "@/lib/knowledge/approved";
 import { questionFingerprint } from "@/lib/knowledge/unanswered";
-
-interface Approved { question: string; language: string; answer: string }
 
 function readAnswers(target: string): Approved[] {
   const files = statSync(target).isDirectory()
@@ -33,11 +34,7 @@ function readAnswers(target: string): Approved[] {
 async function main(target: string, ifUnanswered: boolean) {
   const items = readAnswers(target);
   const saved = await prisma.unansweredQuestion.findMany({where: {fingerprint: {in: items.map((i) => questionFingerprint(i.question))}}});
-  const todo = items.filter((item) => {
-    const row = saved.find((s) => s.fingerprint === questionFingerprint(item.question));
-    if (row?.status !== "answered") return true;
-    return !ifUnanswered && row.answer !== item.answer;
-  });
+  const todo = items.filter((item) => needsPublishing(item, saved.find((s) => s.fingerprint === questionFingerprint(item.question)), ifUnanswered));
   if (!todo.length) return console.log(`[approved] all ${items.length} reviewed answers already published.`);
 
   const vectors = await embedTexts(todo.map((i) => approvedEmbeddingText(i.question, i.answer)));

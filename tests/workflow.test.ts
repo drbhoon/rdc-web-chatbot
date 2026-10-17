@@ -36,3 +36,14 @@ test("Admin authentication rejects default, tampered and expired credentials", (
   assert.equal(requireAdmin(request(token + "x")), false);
   assert.equal(requireAdmin(request(process.env.ADMIN_JWT_SECRET)), false);
 });
+
+test("shipped answers: new ones publish; a newer text replaces only its own earlier version, never a reviewer's", async () => {
+  const { needsPublishing } = await import("../src/lib/knowledge/approved");
+  const item = { question: "Q", language: "en", answer: "new", replaces: ["old"] };
+  assert.equal(needsPublishing(item, undefined, true), true, "not in the database yet");
+  assert.equal(needsPublishing(item, { status: "logged", answer: null }, true), true, "asked but never answered");
+  assert.equal(needsPublishing(item, { status: "answered", answer: "new" }, true), false, "already the same");
+  assert.equal(needsPublishing(item, { status: "answered", answer: "old" }, true), true, "our earlier text is replaced");
+  assert.equal(needsPublishing(item, { status: "answered", answer: "a reviewer's" }, true), false, "a reviewer's upload stays");
+  assert.equal(needsPublishing(item, { status: "answered", answer: "a reviewer's" }, false), true, "unless publishing on purpose");
+});

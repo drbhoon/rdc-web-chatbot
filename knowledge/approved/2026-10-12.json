@@ -12,7 +12,10 @@
   {
     "question": "Do they have separate washrooms for girls in the plant? Also do the girls also have to work night shifts?",
     "language": "en",
-    "answer": "RDC provides separate washrooms for women. A few plants where no women work may not have one yet; when a woman is posted to such a plant, a separate washroom is provided on an emergency basis."
+    "answer": "RDC provides separate washrooms for women. A few plants where no women work may not have one yet; when a woman is posted to such a plant, a separate washroom is provided on an emergency basis.\n\nWomen have to come on night shift if required, and RDC ensures their safety and security.",
+    "replaces": [
+      "RDC provides separate washrooms for women. A few plants where no women work may not have one yet; when a woman is posted to such a plant, a separate washroom is provided on an emergency basis."
+    ]
   },
   {
     "question": "How many females are employed at RDC?",

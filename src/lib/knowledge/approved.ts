@@ -16,3 +16,18 @@ export async function saveApprovedChunk(tx: Prisma.TransactionClient, questionId
   await tx.knowledgeChunk.upsert({where: {id: chunkId}, create: {id: chunkId, documentId: docId, chunkIndex: 0, content, metadata: JSON.stringify({embeddingModel: EMBEDDING_MODEL})}, update: {content}});
   await tx.$executeRaw`UPDATE knowledge_chunks SET vector = ${vectorLiteral(vector)}::vector WHERE id = ${chunkId}`;
 }
+
+/** A reviewed answer kept in knowledge/approved/; "replaces" lists earlier texts shipped there. */
+export interface Approved { question: string; language: string; answer: string; replaces?: string[] }
+
+/**
+ * Whether a shipped answer goes over what the database holds. With
+ * ifUnanswered (every start on hr.rdcc.ai) a published answer is kept unless
+ * it is exactly an earlier shipped text this one replaces: then no reviewer
+ * has changed it since, and the newer text may take its place.
+ */
+export function needsPublishing(item: Approved, row: { status: string; answer: string | null } | undefined, ifUnanswered: boolean): boolean {
+  if (row?.status !== "answered") return true;
+  if (row.answer === item.answer) return false;
+  return !ifUnanswered || (item.replaces ?? []).includes(row.answer ?? "");
+}
