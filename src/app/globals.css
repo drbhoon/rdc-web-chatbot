@@ -279,10 +279,13 @@ body {
   font-size: clamp(0.75rem, 1vw, 0.95rem);
 }
 
+/* The conversation takes whatever the portrait and the input leave. A fixed
+   calc(25dvh - 65px) overran by the input's real height (87px with the
+   WhatsApp line), and the panel scrolled the header over TARA's head. */
 .saathi-fullscreen .saathi-chat-messages {
-  height: calc(25dvh - 65px);
+  height: auto;
   min-height: 0;
-  flex: 0 0 calc(25dvh - 65px);
+  flex: 1 1 0;
 }
 
 .saathi-chat-messages > * {
@@ -547,53 +550,44 @@ body {
   .saathi-language-toggle button { min-width: 50px; min-height: 23px; padding: 2px 5px; font-size: 0.61rem; }
   .saathi-avatar-status { margin-top: 6px; font-size: 0.67rem; }
 
+  /* On a phone TARA takes the top 38% of the screen, the conversation the
+     rest: at 75% her answers were squeezed into a strip (RDC, 2026-10-17).
+     Portrait on the left, name and status beside her, nothing over her face. */
   .saathi-fullscreen .saathi-avatar-shell {
     position: relative;
-    height: 75dvh;
+    height: 38dvh;
     min-height: 0;
-    flex-basis: 75dvh;
+    flex-basis: 38dvh;
     align-items: flex-end;
-    justify-content: center;
-    padding: 54px 8px 8px;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 66px 12px 6px 6px;
   }
 
   .saathi-fullscreen .saathi-avatar-stage {
-    width: min(92vw, 60dvh);
-    height: min(60dvh, 92vw);
-    flex: 0 0 min(92vw, 60dvh);
+    width: min(50vw, calc(38dvh - 74px));
+    height: min(50vw, calc(38dvh - 74px));
+    flex: 0 0 min(50vw, calc(38dvh - 74px));
   }
 
-  .saathi-fullscreen .saathi-avatar-meta {
-    position: absolute;
-    z-index: 5;
-    top: 70px;
-    right: 12px;
-    max-width: 138px;
-    padding: 9px;
-    border: 1px solid rgba(226, 232, 240, 0.92);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.9);
-    box-shadow: 0 4px 18px rgba(15, 30, 53, 0.08);
-    backdrop-filter: blur(8px);
+  .saathi-fullscreen .saathi-avatar-side {
+    flex: 1 1 0;
+    align-self: center;
   }
 
-  /* On a phone the side column dissolves: the name card stays top right and
-     the caption sits over the lower part of the portrait. */
-  .saathi-fullscreen .saathi-avatar-side { display: contents; }
-
+  /* Her reply is read in the conversation below, which now has room; the
+     caption box keeps only the "Tap to hear TARA" button when it is needed. */
   .saathi-fullscreen .saathi-caption {
-    position: absolute;
-    z-index: 5;
-    right: 10px;
-    bottom: 10px;
-    left: 10px;
-    max-height: 21dvh;
-    margin: 0;
-    padding: 9px 11px;
-    background: rgba(255, 255, 255, 0.92);
-    backdrop-filter: blur(8px);
-    font-size: 0.84rem;
+    max-height: none;
+    margin-top: 8px;
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
   }
+
+  .saathi-fullscreen .saathi-caption span { display: none; }
+  .saathi-fullscreen .saathi-tap-to-hear { margin-bottom: 0; font-size: 0.8rem; }
 
   .saathi-fullscreen .saathi-avatar-name { font-size: 0.9rem; }
   .saathi-fullscreen .saathi-avatar-role { font-size: 0.58rem; }
