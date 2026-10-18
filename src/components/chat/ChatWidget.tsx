@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { MessageSquareText, X, Mic, MicOff, Send, Volume2, VolumeX, ChevronDown } from "lucide-react";
 import { getLanguageName, isRTL } from "@/lib/i18n/languageDetector";
-import { isSpeechRecognitionSupported, speechLanguageTag, Speaker, stopSpeaking, unlockAudio } from "@/lib/voice/voiceService";
+import { isSpeaking, isSpeechRecognitionSupported, speechLanguageTag, Speaker, stopSpeaking, unlockAudio } from "@/lib/voice/voiceService";
 import { OpenMic, type MicProblem, type MicState } from "@/lib/voice/openMic";
 import TaraWhatsAppCard from "./TaraWhatsAppCard";
 import { FACTS } from "@/lib/facts";
@@ -62,6 +62,10 @@ const QUICK_PROMPTS = [
 const VOICE_MUTED_KEY = "tara_voice_muted";
 
 const MIC_MESSAGES: Record<MicProblem, { en: string; hi: string }> = {
+  tap: {
+    en: "This browser needs a tap before each question: tap the mic when you want to ask the next one.",
+    hi: "इस browser में हर सवाल से पहले mic दबाना होता है: अगला सवाल पूछने के लिए mic दबाएं।",
+  },
   idle: {
     en: "I turned the mic off after a minute of silence. Tap the mic whenever you want to talk again.",
     hi: "एक मिनट तक कुछ न सुनने पर मैंने mic बंद कर दिया। जब भी बात करनी हो, mic दबाएं।",
@@ -350,7 +354,10 @@ export default function ChatWidget() {
   const sendMessage = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
-      if (!trimmed || state.isLoading) return;
+      if (!trimmed || state.isLoading) {
+        micRef.current?.resume();
+        return;
+      }
 
       const userMsg: Message = {
         id: `user-${Date.now()}`,
@@ -531,6 +538,26 @@ export default function ChatWidget() {
   }, [sendMessage]);
   useEffect(() => () => micRef.current?.off(), []);
 
+  // Safety net for the open mic: whenever TARA is plainly done — no reply
+  // loading, no voice playing or being fetched, nothing typed waiting to be
+  // sent, no tap needed — a paused mic listens again. Her end-of-speech
+  // signal normally does this; a clip that never reported its end left the
+  // mic paused after the first answer (RDC, 2026-10-18).
+  const isLoadingRef = useRef(false);
+  const typedRef = useRef("");
+  const needsTapRef = useRef(false);
+  const tapExplainedRef = useRef(false);
+  useEffect(() => { isLoadingRef.current = state.isLoading; }, [state.isLoading]);
+  useEffect(() => { typedRef.current = inputValue; }, [inputValue]);
+  useEffect(() => {
+    if (micState !== "paused") return;
+    const timer = window.setInterval(() => {
+      if (needsTapRef.current || isLoadingRef.current || isSpeaking() || typedRef.current.trim()) return;
+      micRef.current?.resume();
+    }, 1500);
+    return () => window.clearInterval(timer);
+  }, [micState]);
+
   // ── Voice Input: an open mic ──────────────────────────────────────────
   // Tap once and TARA keeps listening until tapped again, like a radio set
   // (RDC, 2026-10-18). Each pause in speech sends a question. Tapping while
@@ -545,7 +572,8 @@ export default function ChatWidget() {
     }
     if (current?.current === "paused") {
       interrupt();
-      current.resume();
+      needsTapRef.current = false;
+      current.resumeByTap();
       return;
     }
     if (!isSpeechRecognitionSupported()) {
@@ -566,7 +594,16 @@ export default function ChatWidget() {
         if (micStateNow === "listening") setAvatarMode("listening");
         else setAvatarMode((mode) => (mode === "listening" ? "idle" : mode));
       },
-      onProblem: (problem) => tellMicProblem(problem, language),
+      onProblem: (problem) => {
+        if (problem === "tap") {
+          // Say it once; after that the mic simply waits for the tap.
+          if (needsTapRef.current === false && !tapExplainedRef.current) tellMicProblem(problem, language);
+          tapExplainedRef.current = true;
+          needsTapRef.current = true;
+          return;
+        }
+        tellMicProblem(problem, language);
+      },
     });
     micRef.current = mic;
     mic.on();

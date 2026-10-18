@@ -123,3 +123,24 @@ test("open mic: nothing heard at all turns it off as 'silent'; silence after tal
   assert.equal(idle.m.current, "off");
   assert.deepEqual(idle.log.problems, ["idle"]);
 });
+
+test("open mic: a browser that starts listening only on a tap waits, ready, after TARA's answer", async () => {
+  const { m, log } = mic();
+  m.on();
+  latest().say("first question", true);
+  await wait(100);
+  m.resume(); // TARA has finished: no tap this time
+  latest().onerror?.({ error: "not-allowed" });
+  assert.equal(m.current, "paused", "not turned off");
+  assert.deepEqual(log.problems, ["tap"]);
+  m.resumeByTap();
+  assert.equal(m.current, "listening");
+  latest().say("second question", true);
+  await wait(100);
+  assert.deepEqual(log.asked, ["first question", "second question"]);
+  // A real block on the visitor's own tap is still reported as blocked.
+  m.resumeByTap();
+  latest().onerror?.({ error: "not-allowed" });
+  assert.equal(m.current, "off");
+  assert.deepEqual(log.problems, ["tap", "blocked"]);
+});

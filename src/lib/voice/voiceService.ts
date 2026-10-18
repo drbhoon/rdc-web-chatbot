@@ -338,7 +338,10 @@ export class Speaker {
   private playClip(clip: Clip, spokenBefore: number): Promise<boolean> {
     const audio = audioElement();
     return new Promise((resolve) => {
+      let guard: number | null = null;
       const done = (ok: boolean) => {
+        if (guard !== null) window.clearTimeout(guard);
+        guard = null;
         if (this.timer !== null) window.clearInterval(this.timer);
         this.timer = null;
         audio.onended = null;
@@ -360,6 +363,10 @@ export class Speaker {
       const start = () => {
         this.begin();
         this.timer = window.setInterval(tick, 40);
+        // A clip that stalls never reports "ended", and the open mic waits for
+        // the end of TARA's answer to listen again: move on regardless.
+        const seconds = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : clip.text.length / 12;
+        guard = window.setTimeout(() => done(true), (seconds + 4) * 1000);
       };
       audio.play().then(start).catch((error: Error) => {
         if (error?.name !== "NotAllowedError" || !this.options.onBlocked) return done(true);
@@ -394,8 +401,12 @@ export class Speaker {
         this.options.onEnergy?.(0);
         resolve(true);
       };
-      utterance.onend = finish;
-      utterance.onerror = finish;
+      // Chrome's own voice sometimes never fires "end" on a long sentence.
+      const guard = window.setTimeout(finish, (text.length / 10 + 5) * 1000);
+      utterance.onend = utterance.onerror = () => {
+        window.clearTimeout(guard);
+        finish();
+      };
       window.speechSynthesis.speak(utterance);
     });
   }
@@ -416,6 +427,11 @@ export function speakText(options: TTSOptions): boolean {
   speaker.push(options.text);
   speaker.finish();
   return true;
+}
+
+/** Whether TARA has a reply under way (fetching or playing her voice). */
+export function isSpeaking(): boolean {
+  return activeSpeaker !== null;
 }
 
 export function stopSpeaking(): void {

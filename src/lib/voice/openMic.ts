@@ -12,7 +12,8 @@
  * when the microphone is blocked or missing.
  */
 
-export type MicProblem = "blocked" | "no-microphone" | "network" | "no-speech" | "silent" | "idle" | "unavailable";
+/** "tap": this browser starts listening only on a tap (iPhones); the mic waits, ready, for one. */
+export type MicProblem = "blocked" | "no-microphone" | "network" | "no-speech" | "silent" | "idle" | "unavailable" | "tap";
 export type MicState = "off" | "listening" | "paused";
 
 interface RecognitionResult { isFinal: boolean; 0: { transcript: string } }
@@ -74,6 +75,8 @@ export class OpenMic {
   private quietTimer: ReturnType<typeof setTimeout> | null = null;
   private quickEnds = 0;
   private startedAt = 0;
+  /** This listening began from resume() — after TARA's answer, not the visitor's tap. */
+  private fromResume = false;
   private readonly pauseMs: number;
   private readonly silentMs: number;
   private readonly idleMs: number;
@@ -93,6 +96,7 @@ export class OpenMic {
     if (this.state !== "off") return;
     this.heardAny = false;
     this.quickEnds = 0;
+    this.fromResume = false;
     this.listen();
   }
 
@@ -114,7 +118,16 @@ export class OpenMic {
 
   /** Listen again after TARA's answer, if the mic is still on. */
   resume(): void {
-    if (this.state === "paused") this.listen();
+    if (this.state !== "paused") return;
+    this.fromResume = true;
+    this.listen();
+  }
+
+  /** Called from the visitor's tap while paused: listen now (a gesture, so any browser allows it). */
+  resumeByTap(): void {
+    if (this.state !== "paused") return;
+    this.fromResume = false;
+    this.listen();
   }
 
   private listen(): void {
@@ -139,6 +152,8 @@ export class OpenMic {
     recognition.onresult = (event) => this.heard(event);
     recognition.onerror = (event) => {
       const fatal = FATAL_ERRORS[event.error];
+      // Refused only because no one tapped (iPhones): wait, ready, for a tap.
+      if (fatal === "blocked" && this.fromResume) return this.needTap();
       if (fatal) this.fail(fatal);
       // "no-speech" and "aborted" are routine: the end handler restarts it.
     };
@@ -148,8 +163,16 @@ export class OpenMic {
     try {
       recognition.start();
     } catch {
-      this.fail("unavailable");
+      if (this.fromResume) this.needTap();
+      else this.fail("unavailable");
     }
+  }
+
+  private needTap(): void {
+    this.clearTimers();
+    this.halt();
+    this.setState("paused");
+    this.options.onProblem("tap");
   }
 
   private heard(event: RecognitionEvent): void {
