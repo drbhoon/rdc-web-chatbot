@@ -3,7 +3,8 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { MessageSquareText, X, Mic, MicOff, Send, Volume2, VolumeX, ChevronDown } from "lucide-react";
 import { getLanguageName, isRTL } from "@/lib/i18n/languageDetector";
-import { isSpeechRecognitionSupported, createSpeechRecognition, Speaker, stopSpeaking, unlockAudio } from "@/lib/voice/voiceService";
+import { isSpeechRecognitionSupported, speechLanguageTag, Speaker, stopSpeaking, unlockAudio } from "@/lib/voice/voiceService";
+import { OpenMic, type MicProblem, type MicState } from "@/lib/voice/openMic";
 import TaraWhatsAppCard from "./TaraWhatsAppCard";
 import { FACTS } from "@/lib/facts";
 import { withBase } from "@/lib/basePath";
@@ -60,22 +61,11 @@ const QUICK_PROMPTS = [
 
 const VOICE_MUTED_KEY = "tara_voice_muted";
 
-// Voice input that hears nothing for this long gives up and says why.
-const MIC_TIMEOUT_MS = 12_000;
-
-type MicProblem = "blocked" | "no-microphone" | "network" | "no-speech" | "silent" | "unavailable" | "aborted";
-
-/** The browser's speech-recognition error, as one of the problems TARA explains. */
-function micProblem(error: string): MicProblem {
-  if (error === "not-allowed" || error === "service-not-allowed") return "blocked";
-  if (error === "audio-capture") return "no-microphone";
-  if (error === "network") return "network";
-  if (error === "no-speech") return "no-speech";
-  if (error === "aborted") return "aborted";
-  return "unavailable";
-}
-
-const MIC_MESSAGES: Record<Exclude<MicProblem, "aborted">, { en: string; hi: string }> = {
+const MIC_MESSAGES: Record<MicProblem, { en: string; hi: string }> = {
+  idle: {
+    en: "I turned the mic off after a minute of silence. Tap the mic whenever you want to talk again.",
+    hi: "एक मिनट तक कुछ न सुनने पर मैंने mic बंद कर दिया। जब भी बात करनी हो, mic दबाएं।",
+  },
   blocked: {
     en: "I can't use the microphone: it is blocked for this site. Click the lock icon next to the web address, allow the Microphone, and try again — or type your question.",
     hi: "माइक्रोफ़ोन इस साइट के लिए blocked है। Address bar में lock icon पर क्लिक करके Microphone allow करें और फिर कोशिश करें — या अपना सवाल टाइप करें।",
@@ -197,7 +187,9 @@ export default function ChatWidget() {
   });
 
   const [inputValue, setInputValue] = useState("");
-  const [isListening, setIsListening] = useState(false);
+  // The open mic: off, listening, or paused while TARA answers.
+  const [micState, setMicState] = useState<MicState>("off");
+  const isListening = micState === "listening";
   // Voice is on from the start (RDC, 2026-10-10), unless this visitor turned it
   // off before; read after mounting so the server-rendered page matches.
   const [isTTSEnabled, setIsTTSEnabled] = useState(true);
@@ -246,9 +238,9 @@ export default function ChatWidget() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const stopListeningRef = useRef<(() => void) | null>(null);
-  // Ends the current voice input quietly (the visitor pressed the mic again).
-  const settleMicRef = useRef<((problem: MicProblem | null) => void) | null>(null);
+  const micRef = useRef<OpenMic | null>(null);
+  // The latest sendMessage, for the open mic's callback (created once per mic-on).
+  const sendMessageRef = useRef<(text: string) => void>(() => {});
 
   const stopAvatarSpeech = useCallback(() => {
     setSpeechEnergy(0);
@@ -266,7 +258,6 @@ export default function ChatWidget() {
 
   // Why voice input did not work, as a short message in the chat.
   const tellMicProblem = useCallback((problem: MicProblem, language: string) => {
-    if (problem === "aborted") return;
     const text = MIC_MESSAGES[problem][language === "hi" ? "hi" : "en"];
     setState((prev) => ({
       ...prev,
@@ -336,10 +327,7 @@ export default function ChatWidget() {
     setState((prev) => ({ ...prev, isOpen: false }));
     stopSpeaking();
     stopAvatarSpeech();
-    if (stopListeningRef.current) {
-      stopListeningRef.current();
-      setIsListening(false);
-    }
+    micRef.current?.off();
   }, [stopAvatarSpeech]);
 
   useEffect(() => {
@@ -384,6 +372,8 @@ export default function ChatWidget() {
       setBlockedResume(null);
       stopSpeaking();
       nod(true);
+      // The open mic pauses while TARA answers, so she does not hear herself.
+      micRef.current?.pause();
 
       setInputValue("");
 
@@ -412,7 +402,10 @@ export default function ChatWidget() {
               onStart: () => setAvatarMode("speaking"),
               onEnergy: setSpeechEnergy,
               onSpokenChars: setSpokenChars,
-              onEnd: stopAvatarSpeech,
+              onEnd: () => {
+                stopAvatarSpeech();
+                micRef.current?.resume();
+              },
               onBlocked: (resume) => setBlockedResume(() => () => {
                 setBlockedResume(null);
                 resume();
@@ -440,6 +433,7 @@ export default function ChatWidget() {
           );
           setAvatarMode((mode) => (mode === "thinking" ? "idle" : mode));
           if (!state.isOpen) setHasUnread(true);
+          if (!speaker) micRef.current?.resume(); // muted: listen again at once
         };
 
         const contentType = res.headers.get("content-type") || "";
@@ -508,6 +502,7 @@ export default function ChatWidget() {
         }));
         setAvatarMode("idle");
         setSpeechEnergy(0);
+        micRef.current?.resume();
       }
     },
     [state.isLoading, state.sessionId, state.detectedLanguage, state.isOpen, state.leadFormShownForIntent, isTTSEnabled, stopAvatarSpeech, nod]
@@ -524,80 +519,58 @@ export default function ChatWidget() {
     (language: "en" | "hi") => {
       stopSpeaking();
       stopAvatarSpeech();
-      stopListeningRef.current?.();
-      stopListeningRef.current = null;
-      setIsListening(false);
+      micRef.current?.off(); // it listens in one language; tap again in the new one
       setState((prev) => ({ ...prev, detectedLanguage: language }));
       window.setTimeout(() => inputRef.current?.focus(), 0);
     },
     [stopAvatarSpeech]
   );
 
-  // ── Voice Input ───────────────────────────────────────────────────────
+  useEffect(() => {
+    sendMessageRef.current = sendMessage;
+  }, [sendMessage]);
+  useEffect(() => () => micRef.current?.off(), []);
+
+  // ── Voice Input: an open mic ──────────────────────────────────────────
+  // Tap once and TARA keeps listening until tapped again, like a radio set
+  // (RDC, 2026-10-18). Each pause in speech sends a question. Tapping while
+  // she answers interrupts her and listens; tapping while listening turns
+  // the mic off.
   const handleMicToggle = useCallback(() => {
-    unlockAudio(); // the reply to a spoken question is played without a further tap
-    if (isListening) {
-      settleMicRef.current?.(null);
-      stopListeningRef.current?.();
-      setIsListening(false);
-      setAvatarMode("idle");
+    unlockAudio(); // her spoken replies play without a further tap
+    const current = micRef.current;
+    if (current?.current === "listening") {
+      current.off();
       return;
     }
-
+    if (current?.current === "paused") {
+      interrupt();
+      current.resume();
+      return;
+    }
     if (!isSpeechRecognitionSupported()) {
       alert("Voice input is not supported in this browser. Please use Chrome.");
       return;
     }
-
     interrupt();
-    setIsListening(true);
-    setAvatarMode("listening");
     const language = state.detectedLanguage;
-    // If the browser reports nothing at all — no words, no error, no end —
-    // TARA used to sit on "Listening" for ever (RDC, 2026-10-18). Give up
-    // after a while and say why, so a blocked microphone is never silent.
-    let heard = false;
-    let settled = false;
-    const settle = (problem: MicProblem | null) => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(watchdog);
-      setIsListening(false);
-      setAvatarMode((current) => (current === "listening" ? "idle" : current));
-      if (problem) tellMicProblem(problem, language);
-    };
-    settleMicRef.current = settle;
-    // Only while nothing has been heard: a long question is never cut off.
-    const watchdog = window.setTimeout(() => {
-      if (heard) return;
-      settle("silent");
-      stopListeningRef.current?.();
-    }, MIC_TIMEOUT_MS);
-    let stop: (() => void) | null = null;
-    try {
-      stop = createSpeechRecognition(
-        language,
-        (result) => {
-          heard = true;
-          setInputValue(result.transcript);
-          if (!result.isFinal) nod();
-          if (result.isFinal && result.transcript.trim()) {
-            settle(null);
-            sendMessage(result.transcript.trim());
-          }
-        },
-        (error) => {
-          console.error("STT error:", error);
-          settle(micProblem(error));
-        },
-        () => settle(heard ? null : "no-speech"),
-      );
-    } catch (error) {
-      console.error("STT failed to start:", error);
-      settle("unavailable");
-    }
-    stopListeningRef.current = stop;
-  }, [isListening, state.detectedLanguage, sendMessage, nod, interrupt, tellMicProblem]);
+    const mic = new OpenMic({
+      lang: speechLanguageTag(language),
+      onHeard: (text) => {
+        setInputValue(text);
+        nod();
+      },
+      onUtterance: (text) => sendMessageRef.current(text),
+      onState: (micStateNow) => {
+        setMicState(micStateNow);
+        if (micStateNow === "listening") setAvatarMode("listening");
+        else setAvatarMode((mode) => (mode === "listening" ? "idle" : mode));
+      },
+      onProblem: (problem) => tellMicProblem(problem, language),
+    });
+    micRef.current = mic;
+    mic.on();
+  }, [state.detectedLanguage, nod, interrupt, tellMicProblem]);
 
   const langName = getLanguageName(state.detectedLanguage);
   const showVoice = process.env.NEXT_PUBLIC_ENABLE_VOICE_UI !== "false";
@@ -753,23 +726,33 @@ export default function ChatWidget() {
                     type="button"
                     onClick={handleMicToggle}
                     className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all ${
-                      isListening
-                        ? "bg-red-500 text-white shadow-lg scale-110"
+                      micState === "listening"
+                        ? "bg-red-500 text-white shadow-lg scale-110 animate-pulse"
+                        : micState === "paused"
+                        ? "bg-red-100 text-red-600 ring-2 ring-red-300"
                         : "bg-gray-100 text-gray-500 hover:bg-orange-50 hover:text-orange-500"
                     }`}
-                    title={isListening ? "Stop listening" : "Voice input"}
+                    title={
+                      micState === "listening"
+                        ? "Mic on — tap to turn it off"
+                        : micState === "paused"
+                        ? "Mic on — TARA is answering; tap to interrupt her and speak"
+                        : "Mic off — tap to talk"
+                    }
+                    aria-label={micState === "off" ? "Voice input" : "Mic on"}
+                    aria-pressed={micState !== "off"}
                   >
-                    {isListening ? <MicOff size={16} /> : <Mic size={16} />}
+                    {micState === "off" ? <MicOff size={16} /> : <Mic size={16} />}
                   </button>
                 )}
                 <input
                   ref={inputRef}
                   type="text"
                   value={inputValue}
-                  onChange={(e) => { setInputValue(e.target.value); interrupt(); nodAfterTypingPause(e.target.value); }}
+                  onChange={(e) => { setInputValue(e.target.value); interrupt(); micRef.current?.pause(); nodAfterTypingPause(e.target.value); }}
                   placeholder={
                     isListening
-                      ? "Listening..."
+                      ? "Listening… speak, and pause when you finish"
                       : state.detectedLanguage === "en"
                       ? "Type your message..."
                       : "Message / संदेश लिखें..."

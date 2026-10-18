@@ -51,6 +51,11 @@ const LANGUAGE_TAGS: Record<string, string> = {
   kn: "kn-IN", ml: "ml-IN", gu: "gu-IN", pa: "pa-IN", bn: "bn-IN",
 };
 
+/** The browser's speech-recognition language for one of TARA's language codes. */
+export function speechLanguageTag(code: string): string {
+  return LANGUAGE_TAGS[code] || LANGUAGE_TAGS.en;
+}
+
 // "R D C", so the voice spells it out instead of reading a word.
 const forSpeech = (text: string) => text.replace(/\bRDC\b/g, "R D C");
 
