@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "fs";
 import { FACTS, PLANT_LOCATIONS, factsOfRecord } from "../src/lib/facts";
 import { rateLimitedKey } from "../src/lib/rateLimit";
-import { bareEmployeeName, extractEmployeeName, isEmployeeContactRequest, isLeaderName } from "../src/lib/employee/directory";
+import { bareEmployeeName, extractEmployeeName, isEmployeeContactRequest, isEmployeeInfoRequest, isLeaderName } from "../src/lib/employee/directory";
 import { keepBrandNamesInEnglish, mentionsTaraNumber, whatsAppReferral, withoutDiscontinued, withoutRegionWord } from "../src/lib/ai/aiService";
 
 test("facts of record: the official website, numbers and plant count RDC gave", () => {
@@ -129,6 +129,30 @@ test("asking for an employee's phone, e-mail or address gets the directory offer
   assert.equal(isEmployeeContactRequest("What is the head office phone number?"), false);
   assert.equal(isEmployeeContactRequest("Give me the address of the Kalyan plant"), false);
   assert.equal(isEmployeeContactRequest("How many employees does RDC have?"), false);
+});
+
+test("asking for employees' details without a name gets the e-mail code offer; questions about employees in general do not", () => {
+  for (const asked of [
+    "if I need any employees information will you give me", // RDC, 2026-10-18
+    "Can you give me employee details?",
+    "I want information about an employee",
+    "Do you share staff information?",
+    "Can I get details of my colleague?",
+    "मुझे कर्मचारी की जानकारी चाहिए",
+  ]) assert.ok(isEmployeeInfoRequest(asked), asked);
+  for (const notThat of [
+    "How many employees does RDC have?",
+    "What are the details of employee benefits?",
+    "Tell me about RDC's initiatives for employees",
+    "Give me information about RDC",
+    "What is the leave policy for employees?",
+    "I don't want employee information",
+  ]) assert.equal(isEmployeeInfoRequest(notThat), false, notThat);
+  // And "employee benefits" is a topic, not a person named Benefits.
+  for (const topic of ["What are the details of employee benefits?", "Tell me about employee welfare", "employee leave policy"]) {
+    assert.equal(extractEmployeeName(topic), null, topic);
+  }
+  assert.equal(extractEmployeeName("Tell me about employee Kanhaiya"), "Kanhaiya");
 });
 
 test("a message that is just a name is a lookup; greetings, places and products are not", () => {

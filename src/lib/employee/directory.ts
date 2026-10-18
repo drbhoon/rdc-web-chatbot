@@ -42,6 +42,10 @@ const NOT_NAME_WORDS = new Set([
   "md", "ceo", "cfo", "coo", "chairman", "chairperson", "director", "directors", "founder", "founders",
   "head", "president", "owner", "promoter", "promoters", "manager", "management", "team", "leader", "leadership",
   "contact", "person", "plant", "office", "branch", "number", "phone", "price", "rate", "order", "delivery",
+  // Topics about employees as a group: "employee benefits" is not a person named Benefits.
+  "benefit", "benefits", "welfare", "policy", "policies", "initiative", "initiatives", "leave", "leaves",
+  "salary", "salaries", "training", "safety", "strength", "count", "engagement", "details", "detail",
+  "information", "info", "data", "insurance", "transfer", "transfers", "promotion", "promotions", "rules",
 ]);
 
 export interface EmployeeDirectoryResult {
@@ -297,6 +301,35 @@ const PERSON_PATTERN = /\b(?:employees?|staff|colleagues?|his|her|him)\b|कर�
 /** Exported for tests. */
 export function isEmployeeContactRequest(message: string): boolean {
   return CONTACT_PATTERN.test(message) && PERSON_PATTERN.test(message) && !isEmployeeNegation(message);
+}
+
+// Asking for employees' details without naming anyone: "if I need any
+// employee's information will you give me" went to the model, which declined
+// (RDC, 2026-10-18). Not questions ABOUT employees as a group — their
+// benefits, leave, policies or numbers — which the knowledge answers.
+const INFO_WORDS = String.raw`(?:information|info|details?|data|profiles?|records?)`;
+const PERSON_WORDS = String.raw`(?:employees?|employee's|employees'|staff|colleagues?|person)`;
+const NOT_PERSON_TOPIC = String.raw`(?!\s+(?:benefits?|welfare|polic(?:y|ies)|initiatives?|leaves?|count|strength|engagement|training|salar(?:y|ies)|safety|numbers?))`;
+const EMPLOYEE_INFO_PATTERNS = [
+  new RegExp(String.raw`\b${PERSON_WORDS}\s+${INFO_WORDS}\b`, "i"),
+  new RegExp(String.raw`\b${INFO_WORDS}\s+(?:of|about|on|for|regarding)\s+(?:an?\s+|any\s+|some\s+|the\s+|my\s+|our\s+|other\s+)?${PERSON_WORDS}\b${NOT_PERSON_TOPIC}`, "i"),
+  /(?:कर्मचारी|एम्पलाई|एम्प्लॉई)\s*(?:की|के|का)\s*(?:जानकारी|डिटेल|डिटेल्स|इनफॉरमेशन|इन्फॉर्मेशन)/,
+];
+
+/** Exported for tests. */
+export function isEmployeeInfoRequest(message: string): boolean {
+  return EMPLOYEE_INFO_PATTERNS.some((p) => p.test(message)) && !isEmployeeNegation(message);
+}
+
+function infoReply(language: string, verified: boolean): string {
+  if (language === "hi") {
+    return verified
+      ? `हां। आप इस chat में verified हैं: किसी RDC colleague का पूरा नाम लिखें, जैसे “Tell me about Asha Rao”, और मैं उनकी work details (designation और location) दिखाऊंगी। एक code से ${MAX_EMPLOYEE_LOOKUPS_PER_CODE} lookups तक हो सकते हैं।`
+      : `हां, अगर आप RDC employee हैं तो मैं ${MAX_EMPLOYEE_LOOKUPS_PER_CODE} colleagues तक की work details (designation और location) दिखा सकती हूं। कृपया अपनी @rdc.in e-mail ID लिखें: मैं एक code भेजूंगी, उसे यहां enter करें और फिर employee का पूरा नाम लिखें। (Personal phone number या घर का पता मैं share नहीं करती।)`;
+  }
+  return verified
+    ? `Yes. As you are verified in this chat, type an RDC colleague's full name, for example “Tell me about Asha Rao”, and I'll show their work details (designation and location). One code allows up to ${MAX_EMPLOYEE_LOOKUPS_PER_CODE} lookups.`
+    : `Yes — if you are an RDC employee, I can show a colleague's work details (designation and location) for up to ${MAX_EMPLOYEE_LOOKUPS_PER_CODE} employees. Please type your @rdc.in e-mail ID: I will send you a code to enter here, then type the person's full name. (I don't share personal phone numbers or home addresses.)`;
 }
 
 function contactReply(language: string, verified: boolean): string {
@@ -735,8 +768,13 @@ export async function handleEmployeeDirectoryMessage(
   const explicitName = extractEmployeeName(message);
   const employeeName = explicitName || bareEmployeeName(message, Boolean(activeAuth));
   if (!employeeName) {
-    if (!isEmployeeContactRequest(message)) return { handled: false };
-    return { handled: true, message: contactReply(language, Boolean(activeAuth)), eventType: "employee_contact_requested" };
+    if (isEmployeeContactRequest(message)) {
+      return { handled: true, message: contactReply(language, Boolean(activeAuth)), eventType: "employee_contact_requested" };
+    }
+    if (isEmployeeInfoRequest(message)) {
+      return { handled: true, message: infoReply(language, Boolean(activeAuth)), eventType: "employee_info_requested" };
+    }
+    return { handled: false };
   }
   if (isLeaderName(employeeName)) return { handled: false };
 
