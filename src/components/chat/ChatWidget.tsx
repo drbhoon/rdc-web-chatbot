@@ -60,6 +60,48 @@ const QUICK_PROMPTS = [
 
 const VOICE_MUTED_KEY = "tara_voice_muted";
 
+// Voice input that hears nothing for this long gives up and says why.
+const MIC_TIMEOUT_MS = 12_000;
+
+type MicProblem = "blocked" | "no-microphone" | "network" | "no-speech" | "silent" | "unavailable" | "aborted";
+
+/** The browser's speech-recognition error, as one of the problems TARA explains. */
+function micProblem(error: string): MicProblem {
+  if (error === "not-allowed" || error === "service-not-allowed") return "blocked";
+  if (error === "audio-capture") return "no-microphone";
+  if (error === "network") return "network";
+  if (error === "no-speech") return "no-speech";
+  if (error === "aborted") return "aborted";
+  return "unavailable";
+}
+
+const MIC_MESSAGES: Record<Exclude<MicProblem, "aborted">, { en: string; hi: string }> = {
+  blocked: {
+    en: "I can't use the microphone: it is blocked for this site. Click the lock icon next to the web address, allow the Microphone, and try again — or type your question.",
+    hi: "माइक्रोफ़ोन इस साइट के लिए blocked है। Address bar में lock icon पर क्लिक करके Microphone allow करें और फिर कोशिश करें — या अपना सवाल टाइप करें।",
+  },
+  "no-microphone": {
+    en: "I can't find a working microphone. Please check that one is connected and not in use by another app such as Teams or Zoom — or type your question.",
+    hi: "मुझे कोई चालू माइक्रोफ़ोन नहीं मिला। कृपया देखें कि माइक जुड़ा है और Teams या Zoom जैसी किसी दूसरी app में इस्तेमाल नहीं हो रहा — या अपना सवाल टाइप करें।",
+  },
+  network: {
+    en: "Voice input could not reach the browser's speech service — the network may be blocking it. Please type your question, or try again on another network.",
+    hi: "Voice input browser की speech service तक नहीं पहुंच पाया — शायद network इसे block कर रहा है। कृपया अपना सवाल टाइप करें, या किसी दूसरे network पर कोशिश करें।",
+  },
+  "no-speech": {
+    en: "I didn't hear anything. Please press the mic and speak again, a little closer to the microphone — or type your question.",
+    hi: "मुझे कुछ सुनाई नहीं दिया। कृपया mic दबाकर फिर से बोलें, माइक के थोड़ा पास — या अपना सवाल टाइप करें।",
+  },
+  silent: {
+    en: "I couldn't hear you — the microphone sent no sound. Please check that it isn't muted or in use by Teams or Zoom, and that this site may use it — or type your question.",
+    hi: "मुझे आपकी आवाज़ नहीं आई — माइक्रोफ़ोन से कोई आवाज़ नहीं मिली। कृपया देखें कि माइक mute नहीं है, Teams या Zoom में इस्तेमाल नहीं हो रहा, और इस साइट को उसकी अनुमति है — या अपना सवाल टाइप करें।",
+  },
+  unavailable: {
+    en: "Voice input isn't working in this browser just now. Please type your question, or try Google Chrome.",
+    hi: "Voice input अभी इस browser में काम नहीं कर रहा। कृपया अपना सवाल टाइप करें, या Google Chrome में कोशिश करें।",
+  },
+};
+
 const INITIAL_GREETING = "Welcome to RDC Concrete! 🙏\n\nI'm **TARA Online**, your digital assistant. I can help you with information about our products, plant locations, ordering process, and more.\n\nHow can I help you today?";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -205,6 +247,8 @@ export default function ChatWidget() {
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const stopListeningRef = useRef<(() => void) | null>(null);
+  // Ends the current voice input quietly (the visitor pressed the mic again).
+  const settleMicRef = useRef<((problem: MicProblem | null) => void) | null>(null);
 
   const stopAvatarSpeech = useCallback(() => {
     setSpeechEnergy(0);
@@ -219,6 +263,16 @@ export default function ChatWidget() {
     stopSpeaking();
     stopAvatarSpeech();
   }, [stopAvatarSpeech]);
+
+  // Why voice input did not work, as a short message in the chat.
+  const tellMicProblem = useCallback((problem: MicProblem, language: string) => {
+    if (problem === "aborted") return;
+    const text = MIC_MESSAGES[problem][language === "hi" ? "hi" : "en"];
+    setState((prev) => ({
+      ...prev,
+      messages: [...prev.messages, { id: `mic-${Date.now()}`, role: "assistant" as const, content: text, timestamp: new Date(), language }],
+    }));
+  }, []);
 
   // ── Scroll to bottom ────────────────────────────────────────────────────
   const scrollToBottom = useCallback((smooth = true) => {
@@ -483,6 +537,7 @@ export default function ChatWidget() {
   const handleMicToggle = useCallback(() => {
     unlockAudio(); // the reply to a spoken question is played without a further tap
     if (isListening) {
+      settleMicRef.current?.(null);
       stopListeningRef.current?.();
       setIsListening(false);
       setAvatarMode("idle");
@@ -497,28 +552,52 @@ export default function ChatWidget() {
     interrupt();
     setIsListening(true);
     setAvatarMode("listening");
-    const stop = createSpeechRecognition(
-      state.detectedLanguage,
-      (result) => {
-        setInputValue(result.transcript);
-        if (!result.isFinal) nod();
-        if (result.isFinal && result.transcript.trim()) {
-          sendMessage(result.transcript.trim());
-          setIsListening(false);
-        }
-      },
-      (error) => {
-        console.error("STT error:", error);
-        setIsListening(false);
-        setAvatarMode("idle");
-      },
-      () => {
-        setIsListening(false);
-        setAvatarMode((current) => (current === "listening" ? "idle" : current));
-      }
-    );
+    const language = state.detectedLanguage;
+    // If the browser reports nothing at all — no words, no error, no end —
+    // TARA used to sit on "Listening" for ever (RDC, 2026-10-18). Give up
+    // after a while and say why, so a blocked microphone is never silent.
+    let heard = false;
+    let settled = false;
+    const settle = (problem: MicProblem | null) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(watchdog);
+      setIsListening(false);
+      setAvatarMode((current) => (current === "listening" ? "idle" : current));
+      if (problem) tellMicProblem(problem, language);
+    };
+    settleMicRef.current = settle;
+    // Only while nothing has been heard: a long question is never cut off.
+    const watchdog = window.setTimeout(() => {
+      if (heard) return;
+      settle("silent");
+      stopListeningRef.current?.();
+    }, MIC_TIMEOUT_MS);
+    let stop: (() => void) | null = null;
+    try {
+      stop = createSpeechRecognition(
+        language,
+        (result) => {
+          heard = true;
+          setInputValue(result.transcript);
+          if (!result.isFinal) nod();
+          if (result.isFinal && result.transcript.trim()) {
+            settle(null);
+            sendMessage(result.transcript.trim());
+          }
+        },
+        (error) => {
+          console.error("STT error:", error);
+          settle(micProblem(error));
+        },
+        () => settle(heard ? null : "no-speech"),
+      );
+    } catch (error) {
+      console.error("STT failed to start:", error);
+      settle("unavailable");
+    }
     stopListeningRef.current = stop;
-  }, [isListening, state.detectedLanguage, sendMessage, nod, interrupt]);
+  }, [isListening, state.detectedLanguage, sendMessage, nod, interrupt, tellMicProblem]);
 
   const langName = getLanguageName(state.detectedLanguage);
   const showVoice = process.env.NEXT_PUBLIC_ENABLE_VOICE_UI !== "false";
