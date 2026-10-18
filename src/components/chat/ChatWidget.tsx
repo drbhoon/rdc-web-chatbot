@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { MessageSquareText, X, Mic, MicOff, Send, Volume2, VolumeX, ChevronDown } from "lucide-react";
+import Image from "next/image";
+import { X, Mic, MicOff, Send, Volume2, VolumeX, ChevronDown } from "lucide-react";
 import { getLanguageName, isRTL } from "@/lib/i18n/languageDetector";
 import { isSpeaking, isSpeechRecognitionSupported, speechLanguageTag, Speaker, stopSpeaking, unlockAudio } from "@/lib/voice/voiceService";
 import { OpenMic, type MicProblem, type MicState } from "@/lib/voice/openMic";
@@ -827,20 +828,24 @@ export default function ChatWidget() {
         </div>
       )}
 
-      {/* ── Launcher Button ───────────────────────────────────────────────── */}
+      {/* ── Launcher: TARA at the top right, her face and name ───────────
+          (RDC, 2026-10-18: the sales team opens hr.rdcc.ai/chatbot on their
+          phones; a round icon at the bottom was easy to miss.) */}
       {!state.isOpen && (
         <button
           onClick={handleOpen}
-          className="fixed bottom-5 right-4 md:right-6 z-50 w-14 h-14 rounded-full flex items-center justify-center text-white transition-all hover:scale-110 active:scale-95"
-          style={{
-            background: "linear-gradient(135deg, #E85D04 0%, #F48C06 100%)",
-            boxShadow: "0 4px 20px rgba(232, 93, 4, 0.4)",
-            animation: "pulse-ring 2.5s infinite",
-          }}
+          className="tara-launcher fixed z-50 flex items-center gap-2 rounded-full bg-white py-1 pl-1 pr-4 transition-all hover:scale-105 active:scale-95"
           aria-label="Open chat with TARA Online"
           id="chat-launcher"
         >
-          <MessageSquareText size={22} />
+          <span className="tara-launcher-face relative inline-block h-10 w-10 flex-shrink-0 rounded-full">
+            <Image src={withBase("/tara-online.png")} alt="" width={40} height={40} className="h-10 w-10 rounded-full" priority />
+            <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />
+          </span>
+          <span className="text-left leading-tight">
+            <span className="block text-sm font-bold text-gray-900">TARA Online</span>
+            <span className="block text-[11px] font-semibold text-orange-600">Tap to talk</span>
+          </span>
 
           {/* Unread Badge */}
           {hasUnread && (

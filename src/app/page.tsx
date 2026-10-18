@@ -76,7 +76,8 @@ export default function HomePage() {
               </div>
               <div>
                 <div className="font-bold text-gray-800 leading-tight text-sm">RDC Concrete</div>
-                <div className="text-gray-400 text-xs">India&apos;s Ready-Mix Leader</div>
+                {/* Hidden on the narrowest phones, where TARA's launcher takes the right of this bar. */}
+                <div className="hidden min-[400px]:block text-gray-400 text-xs">India&apos;s Ready-Mix Leader</div>
               </div>
             </div>
 

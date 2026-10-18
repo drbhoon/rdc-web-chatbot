@@ -719,3 +719,24 @@ body {
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
+
+/* TARA's launcher: top right, her face and name (RDC, 2026-10-18). On a phone
+   it sits in the site's top bar (64px), whose right side is empty there; on
+   a wider screen just below it, clear of the Get Quote button. */
+.tara-launcher {
+  top: 8px;
+  right: 12px;
+  border: 1px solid #fed7aa;
+  box-shadow: 0 4px 16px rgba(232, 93, 4, 0.25);
+}
+
+.tara-launcher-face {
+  animation: pulse-ring 2.5s infinite;
+}
+
+@media (min-width: 768px) {
+  .tara-launcher {
+    top: 76px;
+    right: 24px;
+  }
+}
