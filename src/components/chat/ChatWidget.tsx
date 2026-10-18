@@ -213,6 +213,13 @@ export default function ChatWidget() {
     setAvatarMode((current) => (current === "speaking" ? "idle" : current));
   }, []);
 
+  // The visitor starts typing or speaking: TARA stops talking, as a person
+  // would. She reads answers in full, so this is how a listener cuts her short.
+  const interrupt = useCallback(() => {
+    stopSpeaking();
+    stopAvatarSpeech();
+  }, [stopAvatarSpeech]);
+
   // ── Scroll to bottom ────────────────────────────────────────────────────
   const scrollToBottom = useCallback((smooth = true) => {
     messagesEndRef.current?.scrollIntoView({
@@ -487,6 +494,7 @@ export default function ChatWidget() {
       return;
     }
 
+    interrupt();
     setIsListening(true);
     setAvatarMode("listening");
     const stop = createSpeechRecognition(
@@ -510,7 +518,7 @@ export default function ChatWidget() {
       }
     );
     stopListeningRef.current = stop;
-  }, [isListening, state.detectedLanguage, sendMessage, nod]);
+  }, [isListening, state.detectedLanguage, sendMessage, nod, interrupt]);
 
   const langName = getLanguageName(state.detectedLanguage);
   const showVoice = process.env.NEXT_PUBLIC_ENABLE_VOICE_UI !== "false";
@@ -679,7 +687,7 @@ export default function ChatWidget() {
                   ref={inputRef}
                   type="text"
                   value={inputValue}
-                  onChange={(e) => { setInputValue(e.target.value); nodAfterTypingPause(e.target.value); }}
+                  onChange={(e) => { setInputValue(e.target.value); interrupt(); nodAfterTypingPause(e.target.value); }}
                   placeholder={
                     isListening
                       ? "Listening..."

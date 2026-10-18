@@ -38,7 +38,7 @@ export interface SpeakerOptions {
   onSpokenChars?: (chars: number) => void;
   /** The browser would not play without a tap: call resume() from a click. */
   onBlocked?: (resume: () => void) => void;
-  /** Stop after about this many characters (a long reply is not read in full). */
+  /** Stop after about this many characters: a safety cap, well above an answer's length. */
   maxChars?: number;
 }
 
@@ -242,7 +242,9 @@ export class Speaker {
     // One voice at a time: remember this one so a new reply can stop it.
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     activeSpeaker = this;
-    this.budget = options.maxChars ?? 560;
+    // Answers are read in full (RDC, 2026-10-18); addresses and catalogues come
+    // as a short spoken summary instead, so this only stops a runaway reply.
+    this.budget = options.maxChars ?? 2500;
   }
 
   push(text: string): void {

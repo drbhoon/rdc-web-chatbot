@@ -49,17 +49,17 @@ test("a reply without a spoken line is written in full and has no SAY", () => {
   assert.deepEqual(parseReply("Hi"), {say: null, text: "Hi", unanswered: false});
 });
 
-test("an approved answer read word for word is spoken whole when short, summarised when it is a list", () => {
+test("an approved answer is read in full; only addresses and long lists (plants, products) are summarised", () => {
+  // Read in full (null): prose of any length, and short lists.
+  assert.equal(spokenSummary("Prices depend on the grade. Message RDC Tara on WhatsApp at +91 86579 40541 (https://wa.me/918657940541), available 24x7.", "en"), null);
+  const mpu = "Meri Pehli Udaan (MPU) is a unique, flagship initiative of RDC. ".repeat(6);
+  assert.equal(spokenSummary(mpu, "en"), null, "a long prose answer is read, not summarised");
+  assert.equal(spokenSummary("These documents are required:\n\n1. PAN card\n2. GST certificate\n3. Cancelled cheque\n4. MSME certificate", "en"), null);
+  // Summarised: a catalogue, and anything with an address.
+  const products = "RDC offers these special concretes:\n\n" + Array.from({ length: 18 }, (_, i) => `- **RDC Crete ${i}**: a product.`).join("\n");
+  assert.equal(spokenSummary(products, "en"), "RDC offers these special concretes. The details are in the answer box.");
   assert.equal(
-    spokenSummary("Prices depend on the grade. Message RDC Tara on WhatsApp at +91 86579 40541 (https://wa.me/918657940541), available 24x7.", "en"),
-    "Prices depend on the grade. Message RDC Tara on WhatsApp at +91 86579 40541, available 24x7.",
-  );
-  assert.equal(
-    spokenSummary("RDC is led by a competent team of professionals:\n\n- **Anil Banchhor**, CEO.\n- **Manish Modani**, CFO.", "en"),
-    "RDC is led by a competent team of professionals. The details are in the answer box.",
-  );
-  assert.equal(
-    spokenSummary("RDC was established in 1993. A brief overview:\n\n- **Foundation**: the first RMC plant.", "en"),
-    "RDC was established in 1993. The details are in the answer box.",
+    spokenSummary("RDC has a plant in Kalyan. Address: Godrej Riviera, Ambivali, Mumbai, MH, 421102.", "en"),
+    "RDC has a plant in Kalyan. The details are in the answer box.",
   );
 });
