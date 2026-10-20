@@ -4,7 +4,7 @@ import { readFileSync } from "fs";
 import { FACTS, PLANT_LOCATIONS, factsOfRecord } from "../src/lib/facts";
 import { rateLimitedKey } from "../src/lib/rateLimit";
 import { bareEmployeeName, extractEmployeeName, isEmployeeContactRequest, isEmployeeInfoRequest, isLeaderName } from "../src/lib/employee/directory";
-import { keepBrandNamesInEnglish, mentionsTaraNumber, whatsAppReferral, withoutDiscontinued, withoutRegionWord } from "../src/lib/ai/aiService";
+import { keepBrandNamesInEnglish, mentionsTaraNumber, whatsAppReferral, withoutDiscontinued, withoutInfraMarket, withoutRegionWord } from "../src/lib/ai/aiService";
 
 test("facts of record: the official website, numbers and plant count RDC gave", () => {
   const block = factsOfRecord();
@@ -189,4 +189,14 @@ test("Sanchita (Sarvam) speaks English and Hindi when configured; RDC is left fo
   Object.assign(process.env, saved.key ? { SARVAM_API_KEY: saved.key } : {}, saved.provider ? { TTS_PROVIDER: saved.provider } : {});
   assert.equal(sarvamInput("**RDC** and TARA Online", "en"), "RDC and Taara Online");
   assert.equal(sarvamInput("RDC और TARA", "hi"), "RDC और तारा");
+});
+
+test("Infra Market is never named: dropped from documents and from replies", () => {
+  const doc = "Monthly production is taken as 248.76 Mn CuM, as reported by Infra.Market and Research And Markets. Projections use cement demand.";
+  assert.equal(withoutDiscontinued(doc), "Projections use cement demand.");
+  assert.equal(
+    withoutInfraMarket("RDC is backed by leading private equity investors, including Tiger Global. RDC is part of Infra Market. Visit www.rdc.in."),
+    "RDC is backed by leading private equity investors, including Tiger Global. Visit www.rdc.in.",
+  );
+  assert.equal(withoutInfraMarket("Nothing to change."), "Nothing to change.");
 });

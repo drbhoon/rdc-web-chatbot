@@ -128,6 +128,9 @@ ${langInstruction}
 ## DISCONTINUED
 - The Customer Connect app has been discontinued. Never mention or recommend it, even if a document does. If a user asks about it, say it is no longer in use and that orders, deliveries and questions are handled by ${FACTS.tara.name} on WhatsApp.
 
+## OWNERSHIP
+- Never mention Infra Market (Infra.Market) or any parent or group company of RDC, even if a document or the visitor does. If asked who owns RDC, about its parent or group, or about its investors, say that RDC Concrete (India) Limited is backed by leading private equity investors, including Tiger Global, and for corporate details refer to ${FACTS.website}.
+
 ## OTHER COMPANIES
 - Speak only about RDC. Do not compare RDC with named competitors or comment on other companies' products, prices, market share or reputation, even when the documents mention them. If asked, say politely that you can only speak for RDC, then share RDC's own strengths.
 
@@ -385,7 +388,24 @@ export function withoutRegionWord(text: string): string {
 
 /** Every fix applied to a reply as it is written. */
 export function cleanReply(text: string): string {
-  return withoutRegionWord(keepBrandNamesInEnglish(text));
+  return withoutInfraMarket(withoutRegionWord(keepBrandNamesInEnglish(text)));
+}
+
+// RDC's group company, Infra Market, is never named (RDC, 2026-10-20). The
+// model may know of it from the news; any sentence naming it is dropped.
+const INFRA_MARKET = /infra[\s.\-]*market/i;
+
+/** Removes every sentence that names Infra Market. */
+export function withoutInfraMarket(text: string): string {
+  return INFRA_MARKET.test(text) ? dropSentences(text, INFRA_MARKET) : text;
+}
+
+function dropSentences(text: string, pattern: RegExp): string {
+  return text
+    .split("\n")
+    .map((line) => (pattern.test(line) ? line.split(/(?<=[.!?।])\s+/).filter((s) => !pattern.test(s)).join(" ") : line))
+    .filter((line, i, lines) => line.trim() !== "" || lines[i] === "")
+    .join("\n");
 }
 
 /** One knowledge excerpt as the model sees it; RDC-reviewed answers are labelled as such. */
@@ -394,20 +414,16 @@ export function formatSource(c: RetrievedChunk, i: number): string {
   return `[${i + 1}] ${label}: ${withoutDiscontinued(c.content)}`;
 }
 
-const DISCONTINUED = /customer[\s-]*connect/i;
+// The discontinued Customer Connect app, and Infra Market, which RDC does not name.
+const NOT_FROM_DOCUMENTS = /customer[\s-]*connect|infra[\s.\-]*market/i;
 
 /**
- * Drops every sentence about the discontinued Customer Connect app from a
- * knowledge excerpt, so older documents (corporate profile, Vision 2030)
- * cannot bring it back into an answer.
+ * Drops every sentence about the discontinued Customer Connect app, or naming
+ * Infra Market, from a knowledge excerpt, so older documents (corporate
+ * profile, Vision 2030) cannot bring them into an answer.
  */
 export function withoutDiscontinued(text: string): string {
-  if (!DISCONTINUED.test(text)) return text;
-  return text
-    .split("\n")
-    .map((line) => (DISCONTINUED.test(line) ? line.split(/(?<=[.!?।])\s+/).filter((s) => !DISCONTINUED.test(s)).join(" ") : line))
-    .filter((line, i, lines) => line.trim() !== "" || lines[i] === "")
-    .join("\n");
+  return NOT_FROM_DOCUMENTS.test(text) ? dropSentences(text, NOT_FROM_DOCUMENTS) : text;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
