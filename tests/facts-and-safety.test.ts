@@ -199,4 +199,5 @@ test("Infra Market is never named: dropped from documents and from replies", () 
     "RDC is backed by leading private equity investors, including Tiger Global. Visit www.rdc.in.",
   );
   assert.equal(withoutInfraMarket("Nothing to change."), "Nothing to change.");
+  assert.equal(withoutInfraMarket("RDC इंफ्रा मार्केट का हिस्सा है। अधिक जानकारी www.rdc.in पर।"), "अधिक जानकारी www.rdc.in पर।");
 });

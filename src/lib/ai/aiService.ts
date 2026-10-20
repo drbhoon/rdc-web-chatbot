@@ -394,7 +394,7 @@ export function cleanReply(text: string): string {
 
 // RDC's group company, Infra Market, is never named (RDC, 2026-10-20). The
 // model may know of it from the news; any sentence naming it is dropped.
-const INFRA_MARKET = /infra[\s.\-]*market/i;
+const INFRA_MARKET = /infra[\s.\-]*market|इ(?:ं|न्)फ्रा\s*मार्केट/i;
 
 /** Removes every sentence that names Infra Market. */
 export function withoutInfraMarket(text: string): string {
@@ -416,7 +416,7 @@ export function formatSource(c: RetrievedChunk, i: number): string {
 }
 
 // The discontinued Customer Connect app, and Infra Market, which RDC does not name.
-const NOT_FROM_DOCUMENTS = /customer[\s-]*connect|infra[\s.\-]*market/i;
+const NOT_FROM_DOCUMENTS = /customer[\s-]*connect|infra[\s.\-]*market|इ(?:ं|न्)फ्रा\s*मार्केट/i;
 
 /**
  * Drops every sentence about the discontinued Customer Connect app, or naming
