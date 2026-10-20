@@ -153,6 +153,9 @@ test("asking for employees' details without a name gets the e-mail code offer; q
     assert.equal(extractEmployeeName(topic), null, topic);
   }
   assert.equal(extractEmployeeName("Tell me about employee Kanhaiya"), "Kanhaiya");
+  // Asked on 2026-10-18 and missed: "in rdc company" and the title "Mr.".
+  assert.equal(extractEmployeeName("Who is Mr. Prathiush in rdc company"), "Prathiush");
+  assert.equal(extractEmployeeName("Tell me about Dr Asha Example"), "Asha Example");
 });
 
 test("a message that is just a name is a lookup; greetings, places and products are not", () => {

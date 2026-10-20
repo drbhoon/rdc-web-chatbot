@@ -197,6 +197,8 @@ function cleanEmployeeName(name: string): string {
     .replace(/^(?:please|pls|kindly|kripya|कृपया|प्लीज)\s+/i, "")
     .replace(/^(?:about|employee|emp|एम्पलाई|कर्मचारी)\s+/i, "")
     .replace(/^(?:named|name(?:d)?\s+is)\s+/i, "")
+    // "Mr. Prathiush": the title is not part of the name in the directory.
+    .replace(/^(?:mr|mrs|ms|miss|dr|shri|sri|smt|श्री|श्रीमती)\.?\s+/i, "")
     .replace(/\s+(?:in\s+)?(?:hindi|english|angrezi|angreji)(?:\s+(?:me|mein|main))?$/i, "")
     .replace(/\s+(?:के|की|का|के बारे|के बारे में|की जानकारी)$/i, "")
     .replace(/\s+(?:please|pls|kindly|kripya|batao|bataye|bataen|bataein|bataiye|बताओ|बताएं|बताइए|जानकारी)$/i, "")
@@ -256,7 +258,7 @@ function isPossibleSingleEmployeeName(name: string): boolean {
 
 // "the employee Kanhaiya at RDC": RDC named after a person is where they
 // work, not the topic of the question.
-const AT_RDC = /\s+(?:at|in|of|from|with)\s+(?:the\s+)?rdc(?:\s+(?:concrete|india|limited|ltd))*\.?(?=\s*[?.!।]*\s*$)/i;
+const AT_RDC = /\s+(?:at|in|of|from|with)\s+(?:the\s+)?rdc(?:\s+(?:concrete|india|limited|ltd|company))*\.?(?=\s*[?.!।]*\s*$)/i;
 
 /** Exported for tests. */
 export function extractEmployeeName(message: string): string | null {
