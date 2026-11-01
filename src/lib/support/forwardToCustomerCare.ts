@@ -1,12 +1,10 @@
 /**
- * Whenever TARA sends a visitor to WhatsApp, the question also goes to customer
- * care by e-mail, so someone can pick it up even if the visitor never messages.
+ * A question TARA cannot answer also goes to customer care by e-mail, so someone
+ * can pick it up even if the visitor never messages on WhatsApp.
  * Off unless TARA_FORWARD_TO is set: hr.rdcc.ai sets it, the Railway test bed
  * does not, so test chats never reach customer care.
  */
 import { transport } from "@/lib/review/dailyReview";
-
-export const refersToWhatsApp = (reply: string) => /86579\s*40541|8657940541|whats\s?app|व्हाट्सएप/i.test(reply);
 
 export interface ForwardedQuestion { question: string; reply: string; askedBy?: string | null; language: string; sessionId: string }
 
@@ -16,9 +14,9 @@ export function forwardMail(to: string, q: ForwardedQuestion) {
     from: process.env.SMTP_FROM || process.env.SMTP_USER,
     to,
     ...(q.askedBy ? {replyTo: q.askedBy} : {}),
-    subject: `TARA Online question: ${firstLine.length > 70 ? `${firstLine.slice(0, 70)}...` : firstLine}`,
+    subject: `TARA Online could not answer: ${firstLine.length > 70 ? `${firstLine.slice(0, 70)}...` : firstLine}`,
     text: [
-      "TARA Online referred this visitor to RDC Tara on WhatsApp.",
+      "TARA Online could not answer this question and referred the visitor to RDC Tara on WhatsApp.",
       "",
       `Asked by: ${q.askedBy || "not signed in"}`,
       `Language: ${q.language}`,
@@ -34,9 +32,9 @@ export function forwardMail(to: string, q: ForwardedQuestion) {
 }
 
 /** Never fails the chat: a mail problem is logged and the visitor still gets the answer. */
-export async function forwardIfReferred(q: ForwardedQuestion): Promise<void> {
+export async function forwardUnanswered(q: ForwardedQuestion): Promise<void> {
   const to = process.env.TARA_FORWARD_TO?.trim();
-  if (!to || !process.env.SMTP_HOST || !refersToWhatsApp(q.reply)) return;
+  if (!to || !process.env.SMTP_HOST) return;
   try {
     await transport().sendMail(forwardMail(to, q));
   } catch (error) {

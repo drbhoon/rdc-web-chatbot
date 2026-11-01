@@ -213,15 +213,12 @@ test("plant facts: dated, closed plants left out of the facts and of retrieval",
   assert.match(kept[0].content, /Deonar/);
 });
 
-test("a reply that refers to WhatsApp is forwarded; the rest are not", async () => {
-  const { refersToWhatsApp, forwardMail, forwardIfReferred } = await import("../src/lib/support/forwardToCustomerCare");
-  assert.equal(refersToWhatsApp("Please message RDC Tara on WhatsApp at +91 86579 40541."), true);
-  assert.equal(refersToWhatsApp("RDC Tara को व्हाट्सएप करें"), true);
-  assert.equal(refersToWhatsApp("Hello! How can I assist you today?"), false);
+test("the e-mail for an unanswered question carries the question and the reply", async () => {
+  const { forwardMail, forwardUnanswered } = await import("../src/lib/support/forwardToCustomerCare");
   const mail = forwardMail("customercare@rdc.in", { question: "Where is my order?", reply: "Message WhatsApp.", askedBy: "a@rdc.in", language: "en", sessionId: "s1" });
   assert.equal(mail.to, "customercare@rdc.in");
   assert.equal(mail.replyTo, "a@rdc.in");
   assert.match(mail.text, /Where is my order\?[\s\S]*Message WhatsApp\./);
   delete process.env.TARA_FORWARD_TO; // off without it: nothing to send, no error
-  await forwardIfReferred({ question: "q", reply: "WhatsApp", language: "en", sessionId: "s" });
+  await forwardUnanswered({ question: "q", reply: "WhatsApp", language: "en", sessionId: "s" });
 });

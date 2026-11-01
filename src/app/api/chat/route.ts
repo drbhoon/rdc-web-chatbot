@@ -19,7 +19,7 @@ import { spokenSummary } from "@/lib/ai/replyParser";
 import { performWebSearch, shouldUseWebSearch } from "@/lib/search/webSearch";
 import { handleEmployeeDirectoryMessage } from "@/lib/employee/directory";
 import { approvedAnswerFor, recordUnanswered } from "@/lib/knowledge/unanswered";
-import { forwardIfReferred } from "@/lib/support/forwardToCustomerCare";
+import { forwardUnanswered } from "@/lib/support/forwardToCustomerCare";
 import { rateLimited, rateLimitedKey } from "@/lib/rateLimit";
 import { loginFromRequest, loginRequired } from "@/lib/auth/rdcLogin";
 import { v4 as uuidv4 } from "uuid";
@@ -301,6 +301,8 @@ export async function POST(req: NextRequest) {
 
   if (aiResult.unanswered) {
     await recordUnanswered(message, detectedLanguage, aiResult.provider === "unavailable" ? "provider_unavailable" : "insufficient_knowledge");
+    // Not awaited: the visitor should not wait on the mail server.
+    void forwardUnanswered({question: message, reply: aiResult.content, askedBy: session.userEmail, language: detectedLanguage, sessionId: sessionId!});
   }
 
   // ── 9. Save Assistant Response ─────────────────────────────────────────────
@@ -320,9 +322,6 @@ export async function POST(req: NextRequest) {
       processingMs: Date.now() - startTime,
     },
   });
-
-  // Not awaited: the visitor should not wait on the mail server.
-  void forwardIfReferred({question: message, reply: aiResult.content, askedBy: session.userEmail, language: detectedLanguage, sessionId: sessionId!});
 
   // Update the user message record with classification info
   await prisma.chatMessage.update({
