@@ -214,11 +214,13 @@ test("plant facts: dated, closed plants left out of the facts and of retrieval",
 });
 
 test("the e-mail for an unanswered question carries the question and the reply", async () => {
-  const { forwardMail, forwardUnanswered } = await import("../src/lib/support/forwardToCustomerCare");
+  const { forwardMail, forwardedNote, forwardUnanswered } = await import("../src/lib/support/forwardToCustomerCare");
   const mail = forwardMail("customercare@rdc.in", { question: "Where is my order?", reply: "Message WhatsApp.", askedBy: "a@rdc.in", language: "en", sessionId: "s1" });
   assert.equal(mail.to, "customercare@rdc.in");
   assert.equal(mail.replyTo, "a@rdc.in");
   assert.match(mail.text, /Where is my order\?[\s\S]*Message WhatsApp\./);
-  delete process.env.TARA_FORWARD_TO; // off without it: nothing to send, no error
-  await forwardUnanswered({ question: "q", reply: "WhatsApp", language: "en", sessionId: "s" });
+  assert.equal(forwardedNote("customercare@rdc.in", "en", true), "I have e-mailed your question to customercare@rdc.in, and they will respond to you.");
+  assert.doesNotMatch(forwardedNote("customercare@rdc.in", "en", false), /respond/); // no address to respond to
+  delete process.env.TARA_FORWARD_TO; // off without it: nothing to send, no error, nothing to say
+  assert.equal(await forwardUnanswered({ question: "q", reply: "WhatsApp", language: "en", sessionId: "s" }), null);
 });

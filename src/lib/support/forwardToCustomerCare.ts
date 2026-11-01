@@ -31,13 +31,28 @@ export function forwardMail(to: string, q: ForwardedQuestion) {
   };
 }
 
-/** Never fails the chat: a mail problem is logged and the visitor still gets the answer. */
-export async function forwardUnanswered(q: ForwardedQuestion): Promise<void> {
+/** What TARA adds once the e-mail has gone. A reply is only promised if there is an address to reply to. */
+export function forwardedNote(to: string, language: string, signedIn: boolean): string {
+  if (language === "hi") return `मैंने आपका सवाल ${to} को ईमेल कर दिया है${signedIn ? " और वे आपको जवाब देंगे" : ""}।`;
+  return `I have e-mailed your question to ${to}${signedIn ? ", and they will respond to you" : ""}.`;
+}
+
+/**
+ * Sends the question and returns what TARA should say about it, or null if it
+ * did not go. Never fails the chat: a mail problem is logged and the visitor
+ * still gets the answer.
+ */
+export async function forwardUnanswered(q: ForwardedQuestion): Promise<string | null> {
   const to = process.env.TARA_FORWARD_TO?.trim();
-  if (!to || !process.env.SMTP_HOST) return;
+  if (!to || !process.env.SMTP_HOST) return null;
   try {
-    await transport().sendMail(forwardMail(to, q));
+    await Promise.race([
+      transport().sendMail(forwardMail(to, q)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timed out")), 8000)),
+    ]);
+    return forwardedNote(to, q.language, Boolean(q.askedBy));
   } catch (error) {
     console.error("[forward] could not e-mail customer care:", error);
+    return null;
   }
 }

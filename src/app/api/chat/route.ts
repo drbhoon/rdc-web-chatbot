@@ -299,10 +299,15 @@ export async function POST(req: NextRequest) {
     approvedAnswer: approved?.answer,
   }, events);
 
+  let reply = aiResult.content;
   if (aiResult.unanswered) {
     await recordUnanswered(message, detectedLanguage, aiResult.provider === "unavailable" ? "provider_unavailable" : "insufficient_knowledge");
-    // Not awaited: the visitor should not wait on the mail server.
-    void forwardUnanswered({question: message, reply: aiResult.content, askedBy: session.userEmail, language: detectedLanguage, sessionId: sessionId!});
+    // Said only once the mail has really gone; the answer is already on screen meanwhile.
+    const note = await forwardUnanswered({question: message, reply, askedBy: session.userEmail, language: detectedLanguage, sessionId: sessionId!});
+    if (note) {
+      reply = `${reply}\n\n${note}`;
+      events?.onText?.(`\n\n${note}`);
+    }
   }
 
   // ── 9. Save Assistant Response ─────────────────────────────────────────────
@@ -311,7 +316,7 @@ export async function POST(req: NextRequest) {
       id: uuidv4(),
       sessionId: sessionId!,
       role: "assistant",
-      content: aiResult.content,
+      content: reply,
       language: detectedLanguage,
       intent: classification.intent,
       confidence: aiResult.confidence,
@@ -357,7 +362,7 @@ export async function POST(req: NextRequest) {
   const processingMs = Date.now() - startTime;
 
   return {
-    message: aiResult.content,
+    message: reply,
     speech: "speech" in aiResult ? aiResult.speech : null,
     sessionId: sessionId!,
     detectedLanguage,

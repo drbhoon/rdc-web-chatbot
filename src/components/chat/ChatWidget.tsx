@@ -763,12 +763,12 @@ export default function ChatWidget() {
                   <button
                     type="button"
                     onClick={handleMicToggle}
-                    className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all ${
+                    className={`flex-shrink-0 w-14 h-14 rounded-full flex items-center justify-center transition-all ${
                       micState === "listening"
                         ? "bg-red-500 text-white shadow-lg scale-110 animate-pulse"
                         : micState === "paused"
                         ? "bg-red-100 text-red-600 ring-2 ring-red-300"
-                        : "bg-gray-100 text-gray-500 hover:bg-orange-50 hover:text-orange-500"
+                        : "bg-orange-100 text-orange-600 hover:bg-orange-200"
                     }`}
                     title={
                       micState === "listening"
@@ -780,7 +780,7 @@ export default function ChatWidget() {
                     aria-label={micState === "off" ? "Voice input" : "Mic on"}
                     aria-pressed={micState !== "off"}
                   >
-                    {micState === "off" ? <MicOff size={16} /> : <Mic size={16} />}
+                    {micState === "off" ? <MicOff size={28} /> : <Mic size={28} />}
                   </button>
                 )}
                 <input

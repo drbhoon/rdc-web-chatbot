@@ -99,7 +99,7 @@ export class OpenMic {
   private readonly idleMs: number;
 
   constructor(private readonly options: OpenMicOptions) {
-    this.pauseMs = options.pauseMs ?? 1800;
+    this.pauseMs = options.pauseMs ?? 1300;
     this.silentMs = options.silentMs ?? 15_000;
     this.idleMs = options.idleMs ?? 60_000;
   }
