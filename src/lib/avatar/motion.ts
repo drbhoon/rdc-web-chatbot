@@ -41,20 +41,19 @@ export const LIMITS = { tilt: 5, rise: 0.02, turn: 0.012, nod: 0.01, pitch: 0.03
 // The listening nod: the head tips forward (pitch) and dips a little (drop),
 // quicker down than up, then comes back. Tuned on RDC's tests: a 1.5% pitch
 // with a lean was missed (2026-10-10); 3.7% in all was too pronounced
-// (2026-10-11, about 4% of the avatar's height on screen). Now about 2%,
-// varying a little from nod to nod as a real listener's do.
-const ACK_SECONDS = 1.1;
+// (2026-10-11, about 4% of the avatar's height on screen). At most about 2%,
+// and no two alike: identical nods looked mechanical (2026-11-01).
+const ACK_SECONDS: [number, number] = [0.95, 1.35];
 const ACK_PITCH = 0.017;
 const ACK_DROP = 0.004;
-const ACK_SCALE: [number, number] = [0.8, 1.05];
+const ACK_SCALE: [number, number] = [0.6, 1.05];
+// Most nods have no blink; a blink on every one looked staged.
+const NOD_BLINK_CHANCE = 0.3;
 // A blink at the bottom of a nod, only a little slower than an ordinary one:
 // a slow blink lingers on the half-closed frame, which looks smudged.
 const NOD_BLINK_SCALE = 1.15;
-// Where in the nod the head is lowest (fraction of ACK_SECONDS).
+// Where in the nod the head is lowest (fraction of its length).
 const ACK_BOTTOM = 0.4;
-// While the visitor speaks (mic on), a nod every few seconds, and no other
-// head movement at all (RDC, 2026-10-11).
-const LISTEN_NOD_GAP: [number, number] = [1.5, 2.6];
 
 class Spring {
   value = 0;
@@ -95,7 +94,7 @@ export class AvatarMotion {
   private ackUntil = -1;
   private ackStartedAt = -10;
   private ackScale = 1;
-  private nextListenNodAt = 0;
+  private ackSeconds = 1.1;
   /** 0 = the usual small movements; 1 = perfectly still apart from the nod (listening). */
   private readonly still = new Spring();
 
@@ -136,26 +135,27 @@ export class AvatarMotion {
    * The "I understand" nod of someone listening: the head tips forward and
    * comes back, with nothing else moving (RDC's reference: an AI presenter
    * listening, 2026-10-10). Call it while the visitor is asking; calls during
-   * a nod already under way are ignored. In listening mode it repeats by itself.
+   * a nod already under way are ignored. It never repeats by itself: she nods
+   * at someone talking, not at silence with the mic on.
    */
-  acknowledge(blink = true): void {
+  acknowledge(blink = this.random() < NOD_BLINK_CHANCE): void {
     const t = this.t;
     if (t < this.ackUntil + 0.8) return; // under way, or only just finished
     this.ackStartedAt = t;
-    this.ackUntil = t + ACK_SECONDS;
+    this.ackSeconds = this.between(...ACK_SECONDS);
+    this.ackUntil = t + this.ackSeconds;
     this.ackScale = this.between(...ACK_SCALE);
     this.gesture = ZERO;
     this.gestureEndsAt = t;
     this.nextGestureAt = this.ackUntil + this.between(1, 2.5);
-    this.nextListenNodAt = this.ackUntil + this.between(...LISTEN_NOD_GAP);
     // A blink whose closed moment falls at the bottom of the nod. (Half-lowered
     // lids were tried: blending half of the closed-eye photo ghosts the eyes.)
-    if (blink) this.slowBlinkAt = t + ACK_SECONDS * ACK_BOTTOM - 0.06 * NOD_BLINK_SCALE;
+    if (blink) this.slowBlinkAt = t + this.ackSeconds * ACK_BOTTOM - 0.06 * NOD_BLINK_SCALE;
   }
 
   /** 0..1: how far down the nod the head is — eased, quicker down than up. */
   private ackDepth(): number {
-    const s = (this.t - this.ackStartedAt) / ACK_SECONDS;
+    const s = (this.t - this.ackStartedAt) / this.ackSeconds;
     if (s <= 0 || s >= 1) return 0;
     const ease = (x: number) => x * x * (3 - 2 * x);
     return s < ACK_BOTTOM ? ease(s / ACK_BOTTOM) : 1 - ease((s - ACK_BOTTOM) / (1 - ACK_BOTTOM));
@@ -224,7 +224,6 @@ export class AvatarMotion {
       this.lastMode = mode;
       // A nod in progress finishes first (the question was just sent and the
       // mode turned to "thinking"); the new mode takes over after it.
-      if (mode === "listening") this.nextListenNodAt = t + this.between(0.6, 1.2);
       if (!acknowledging) {
         this.gesture = ZERO;
         this.nextGestureAt = t + this.between(0.8, 2);
@@ -232,8 +231,6 @@ export class AvatarMotion {
       }
     }
 
-    // Listening: a nod every few seconds, sometimes with a soft blink.
-    if (mode === "listening" && !acknowledging && t >= this.nextListenNodAt) this.acknowledge(this.random() < 0.35);
     const nodding = t < this.ackUntil;
     const blink = this.blinkAmount(speaking);
     if (reducedMotion) return { tilt: 0, rise: 0, turn: 0, nod: 0, pitch: 0, breath: 0, sway: 0, blink };

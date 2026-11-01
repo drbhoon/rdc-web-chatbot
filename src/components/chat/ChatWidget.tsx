@@ -212,15 +212,15 @@ export default function ChatWidget() {
   }, []);
 
   // TARA's understanding nod while the visitor is asking: as they speak into
-  // the mic, when they pause typing, and when they send. At most every 3.5 s,
-  // so it reads as listening, not bobbing.
+  // the mic, when they pause typing, and when they send. Every 2.5 to 6 s, at
+  // no fixed beat, so it reads as listening, not bobbing.
   const [nodSignal, setNodSignal] = useState(0);
-  const lastNodAt = useRef(0);
+  const nextNodAt = useRef(0);
   const typingPause = useRef<number | null>(null);
   const nod = useCallback((force = false) => {
     const now = Date.now();
-    if (!force && now - lastNodAt.current < 3500) return;
-    lastNodAt.current = now;
+    if (!force && now < nextNodAt.current) return;
+    nextNodAt.current = now + 2500 + Math.random() * 3500;
     setNodSignal((n) => n + 1);
   }, []);
   const nodAfterTypingPause = useCallback((text: string) => {

@@ -48,18 +48,27 @@ test("blinks come at irregular intervals, 2-6 s apart", () => {
   assert.ok(poses.every((p) => p.blink >= 0 && p.blink <= 1));
 });
 
-test("listening: the head only nods — a clear nod every few seconds, nothing else moves", () => {
+test("listening: the head only nods, and only when asked to: no nodding at silence", () => {
   const motion = new AvatarMotion(seeded(3));
   run("idle", 5, 0, false, motion);
-  const poses = run("listening", 20, 0, false, motion).slice(120); // after the fade-in
+  const silent = run("listening", 10, 0, false, motion);
+  assert.ok(silent.every((p) => p.pitch === 0), "no nods while nobody is talking");
+  // The visitor talks: the chat window asks for a nod every few seconds.
+  const poses: AvatarPose[] = [];
+  for (let i = 0; i < 6; i++) {
+    motion.acknowledge();
+    poses.push(...run("listening", 3, 0, false, motion));
+  }
   for (const p of poses) {
     assert.ok(Math.abs(p.tilt) < 0.05 && Math.abs(p.turn) < 0.0002 && Math.abs(p.rise) < 0.0002, "no tilt, turn or rise");
     assert.ok(Math.abs(p.sway) < 0.01 && Math.abs(p.breath) < 0.03, "no sway or breathing");
   }
   const starts = poses.filter((p, i) => i > 0 && p.pitch > 0 && poses[i - 1].pitch === 0).length;
-  assert.ok(starts >= 4 && starts <= 8, `${starts} nods in 18 s`);
+  assert.ok(starts >= 4 && starts <= 7, `${starts} nods in 18 s`);
   const deepest = Math.max(...poses.map((p) => p.pitch + p.nod));
-  assert.ok(deepest > 0.015 && deepest < 0.024, `visible but not pronounced: ${deepest.toFixed(3)}`);
+  assert.ok(deepest > 0.012 && deepest < 0.024, `visible but not pronounced: ${deepest.toFixed(3)}`);
+  const depths = [0, 3, 6, 9, 12, 15].map((s) => Math.max(...poses.slice(s * 60, (s + 3) * 60).map((p) => p.pitch)).toFixed(4));
+  assert.ok(new Set(depths).size >= 3, `no two alike: ${depths}`);
 });
 
 test("reduced motion: the head keeps still, blinking stays", () => {
@@ -71,13 +80,13 @@ test("reduced motion: the head keeps still, blinking stays", () => {
 test("the understanding nod: one clear forward nod with a soft blink at the bottom, then level again", () => {
   const motion = new AvatarMotion(seeded(11));
   run("idle", 3, 0, false, motion);
-  motion.acknowledge();
+  motion.acknowledge(true);
   // The question is sent at once: the mode turns to "thinking", the nod still finishes.
   const poses = run("thinking", 3, 0, false, motion);
   const nod = poses.slice(0, 80);
   const pitch = nod.map((p) => p.pitch);
-  assert.ok(Math.max(...pitch) > 0.012 && Math.max(...pitch) < 0.019, "the head pitches forward, visibly but gently");
-  assert.ok(Math.max(...nod.map((p) => p.nod)) > 0.003, "and dips with it");
+  assert.ok(Math.max(...pitch) > 0.009 && Math.max(...pitch) < 0.019, "the head pitches forward, visibly but gently");
+  assert.ok(Math.max(...nod.map((p) => p.nod)) > 0.002, "and dips with it");
   // One smooth nod, not a bob: pitch rises to a single peak and comes back.
   const peaks = pitch.filter((d, i) => i > 0 && i < pitch.length - 1 && d > pitch[i - 1] && d >= pitch[i + 1]);
   assert.equal(peaks.length, 1);

@@ -48,10 +48,11 @@ void main() {
   // Work in units of image height, y down.
   vec2 p = vec2(a_uv.x * u_aspect, a_uv.y);
   float w = 1.0 - smoothstep(${HEAD_UNTIL.toFixed(3)}, ${BODY_FROM.toFixed(3)}, a_uv.y);
-  // A forward nod seen from the front: the eyes and nose move down most, the
-  // crown hardly at all and the chin less than the eyes, so the lower face
-  // shortens. Peaks at eye level; nothing below the collar moves.
-  float pitchShape = smoothstep(0.0, ${EYE_LEVEL.toFixed(3)}, a_uv.y) * (1.0 - 0.75 * smoothstep(${EYE_LEVEL.toFixed(3)}, ${HEAD_UNTIL.toFixed(3)}, a_uv.y)) * w;
+  // A forward nod seen from the front: the whole head goes down, the eyes and
+  // nose a little more than the crown and chin. Keeping the crown and chin
+  // nearly fixed squeezed the face like rubber (2026-11-01). Peaks at eye level;
+  // nothing below the collar moves, and the image's top edge stays put.
+  float pitchShape = smoothstep(0.0, 0.06, a_uv.y) * mix(0.55, 1.0, smoothstep(0.0, ${EYE_LEVEL.toFixed(3)}, a_uv.y)) * (1.0 - 0.25 * smoothstep(${EYE_LEVEL.toFixed(3)}, ${HEAD_UNTIL.toFixed(3)}, a_uv.y)) * w;
   p.y += u_pitch * pitchShape;
   p = rotate(p, vec2(u_pivot.x * u_aspect, u_pivot.y), u_tilt * w);
   p += vec2(u_head.x, u_head.y) * w;
