@@ -58,10 +58,10 @@
     "cities": 53
   },
   "plants": {
-    "total": 141,
-    "commercial": 113,
-    "asOf": "October 2026",
-    "closed": ["Khalapur"],
+    "total": 140,
+    "commercial": 111,
+    "asOf": "1 November 2026",
+    "closed": ["Khalapur", "Greater Noida 1"],
     "commercialListSource": "Plant Names and addresses Sep 26.xlsx"
   }
 }

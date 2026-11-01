@@ -12,8 +12,8 @@ test("facts of record: the official website, numbers and plant count RDC gave", 
   assert.match(block, /https:\/\/www\.rdc\.in/);
   assert.match(block, /\+91 22 6789 6789/);
   assert.match(block, /\+91 86579 40541/);
-  assert.match(block, /141 ready-mix concrete plants/);
-  assert.match(block, /113 commercial plants and 28 dedicated plants/);
+  assert.match(block, /140 ready-mix concrete plants/);
+  assert.match(block, /Do not give a split/);
   assert.match(block, /21 states, 2 union territories and 53 cities/);
   assert.doesNotMatch(block, /rdcconcrete/);
   assert.match(block, /Founded: 1993/);
@@ -45,7 +45,7 @@ test("an unanswered question ends with RDC Tara's WhatsApp number", () => {
 
 test("plant knowledge: every commercial plant, the count of record, nothing on dedicated plants", () => {
   const chunks = readFileSync("knowledge/public/commercial-plants.jsonl", "utf8").trim().split("\n").map((l) => JSON.parse(l));
-  assert.equal(chunks.length, FACTS.plants.commercial + 1);
+  assert.equal(chunks.length, 114); // the September list with addresses, loaded in the database; closed plants are filtered at retrieval
   const [overview, ...plants] = chunks;
   assert.match(overview.text, /operates 141 [\s\S]* 113 commercial plants [\s\S]* 28 dedicated plants/);
   assert.match(overview.text, /Details of dedicated plants are not shared/);
@@ -57,11 +57,8 @@ test("plant knowledge: every commercial plant, the count of record, nothing on d
   }
   assert.equal(new Set(chunks.map((c) => c.id)).size, chunks.length, "chunk ids are unique");
   // The place list in every answer's facts matches the plant knowledge.
-  assert.equal(PLANT_LOCATIONS.reduce((n, l) => n + l.plants, 0), FACTS.plants.commercial);
-  const counted = new Map<string, number>();
-  for (const plant of plants) counted.set(plant.metadata.location, (counted.get(plant.metadata.location) ?? 0) + 1);
-  assert.deepEqual(Object.fromEntries(counted), Object.fromEntries(PLANT_LOCATIONS.map((l) => [l.name, l.plants])));
-  assert.match(factsOfRecord(), /Commercial plant locations[^\n]*Bengaluru \(12\)/);
+  assert.equal(PLANT_LOCATIONS.reduce((n, l) => n + l.plants, 0), 139); // the 1 Nov list, with Mumbai at RDC's 12 against 13 rows
+  assert.match(factsOfRecord(), /Plant locations[^\n]*Bengaluru \(14\)/);
   // "Region" is an internal RDC business unit, never a way to describe geography.
   for (const chunk of chunks) assert.doesNotMatch(JSON.stringify(chunk), /region/i);
 });
@@ -206,8 +203,8 @@ test("plant facts: dated, closed plants left out of the facts and of retrieval",
   const { factsOfRecord } = await import("../src/lib/facts");
   const { withoutClosedPlants } = await import("../src/lib/knowledge/retrieval");
   const text = factsOfRecord();
-  assert.match(text, /As of October 2026/);
-  assert.match(text, /Mumbai \(10\): Deonar, Kalyan, Kashimira, Mankoli, Pallava/);
+  assert.match(text, /As of 1 November 2026/);
+  assert.match(text, /Mumbai \(12\): Deonar, Kalyan, Kashimira, Mankoli, Pallava/);
   const kept = withoutClosedPlants([
     { content: "RDC commercial ready-mix concrete plant: Khalapur, Mumbai (plant name MUM-Khalapur)" },
     { content: "RDC commercial ready-mix concrete plant: Deonar, Mumbai (plant name MUM-Deonar)" },

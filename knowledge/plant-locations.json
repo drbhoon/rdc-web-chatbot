@@ -1,5 +1,5 @@
 {
-  "asOf": "2026-09-27",
+  "asOf": "2026-11-01",
   "locations": [
     {
       "name": "Andhra Pradesh",
@@ -19,7 +19,7 @@
     },
     {
       "name": "Bengaluru",
-      "plants": 12,
+      "plants": 14,
       "localities": [
         "Anjanapura",
         "Bagalur",
@@ -37,14 +37,14 @@
     },
     {
       "name": "Bihar",
-      "plants": 1,
+      "plants": 2,
       "localities": [
         "Patna Comm"
       ]
     },
     {
       "name": "Chennai",
-      "plants": 6,
+      "plants": 8,
       "localities": [
         "Madhavaram",
         "Medavakkam",
@@ -64,11 +64,11 @@
     },
     {
       "name": "Delhi NCR",
-      "plants": 11,
+      "plants": 15,
       "localities": [
         "Faridabad",
+        "Ghaziabad",
         "Ghewra",
-        "Greater Noida 1",
         "Greater Noida 2",
         "Greater Noida 3",
         "Greater Noida 4",
@@ -81,7 +81,7 @@
     },
     {
       "name": "Goa",
-      "plants": 2,
+      "plants": 3,
       "localities": [
         "Goa 1",
         "Goa 2"
@@ -89,7 +89,7 @@
     },
     {
       "name": "Gujarat",
-      "plants": 8,
+      "plants": 10,
       "localities": [
         "Ahmedabad Gift City",
         "Hazira Commercial",
@@ -103,7 +103,7 @@
     },
     {
       "name": "Hyderabad",
-      "plants": 9,
+      "plants": 13,
       "localities": [
         "Bachupally",
         "Khanapur",
@@ -134,7 +134,7 @@
     },
     {
       "name": "Karnataka",
-      "plants": 1,
+      "plants": 2,
       "localities": [
         "Mangalore"
       ]
@@ -166,7 +166,7 @@
     },
     {
       "name": "Madhya Pradesh",
-      "plants": 5,
+      "plants": 6,
       "localities": [
         "Bhopal 1",
         "Bhopal 2",
@@ -186,12 +186,11 @@
     },
     {
       "name": "Mumbai",
-      "plants": 10,
+      "plants": 12,
       "localities": [
         "Deonar",
         "Kalyan",
         "Kashimira",
-        "Khalapur",
         "Mankoli",
         "Pallava",
         "Sakinaka",
@@ -202,7 +201,7 @@
     },
     {
       "name": "Odisha",
-      "plants": 2,
+      "plants": 5,
       "localities": [
         "Bhubaneswar 2",
         "Cuttack"
@@ -210,7 +209,7 @@
     },
     {
       "name": "Pune",
-      "plants": 5,
+      "plants": 8,
       "localities": [
         "Hadapsar",
         "Hinjewadi",
@@ -248,10 +247,9 @@
     },
     {
       "name": "Uttar Pradesh",
-      "plants": 4,
+      "plants": 3,
       "localities": [
         "Ayodhya",
-        "Ghaziabad",
         "Gorakhpur",
         "Lucknow"
       ]
@@ -263,6 +261,11 @@
         "Dehradun",
         "Haridwar"
       ]
+    },
+    {
+      "name": "West Bengal",
+      "plants": 1,
+      "localities": []
     }
   ]
 }
