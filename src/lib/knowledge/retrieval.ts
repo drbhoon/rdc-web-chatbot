@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { FACTS } from "@/lib/facts";
 import { embedTexts, vectorLiteral } from "./embeddings";
 export interface RetrievedChunk {
   id: string; documentId: string; title: string; category: string; content: string;
@@ -17,7 +18,11 @@ export async function retrieveRelevantChunks(query: string, options: {topK?: num
       AND (${category}::text IS NULL OR d.category = ${category})
     ORDER BY c.vector <=> ${vectorLiteral(embedding)}::vector LIMIT ${limit}`;
   const chunks = rows.filter(r => r.similarity >= 0.25).map(r => ({...r, score: Math.round(r.similarity * 100), similarityScore: r.similarity, retrievalMode: "vector" as const}));
-  return approvedFirst(chunks);
+  return approvedFirst(withoutClosedPlants(chunks));
+}
+/** The plant list in the database still holds plants closed since it was loaded. */
+export function withoutClosedPlants<T extends {content: string}>(chunks: T[]): T[] {
+  return chunks.filter(c => !FACTS.plants.closed.some(name => c.content.startsWith(`RDC commercial ready-mix concrete plant: ${name},`)));
 }
 export const APPROVED_CATEGORY = "approved_answers";
 /** An answer RDC reviewed for a question close to this one goes ahead of any document. */

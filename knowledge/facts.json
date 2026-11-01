@@ -36,7 +36,7 @@
     "asOf": "2026-10-11",
     "namesFrom": "the HR portal employee master",
     "executives": [
-      { "name": "Anil Kumar Banchhor", "role": "Chief Executive Officer (CEO)", "about": "over 30 years in ready-mix concrete and an acknowledged corporate leader" },
+      { "name": "Anil Kumar Banchhor", "role": "Managing Director & CEO (MD & CEO)", "about": "over 30 years in ready-mix concrete and an acknowledged corporate leader" },
       { "name": "Dr K S Bhoon", "role": "Chief Operating Officer (COO)", "about": "an Indian Army veteran (Brigadier) with a PhD from IIT Delhi" },
       { "name": "Manish Modani", "role": "Chief Financial Officer (CFO)", "about": "a Chartered Accountant with over 20 years in finance" }
     ],
@@ -60,6 +60,8 @@
   "plants": {
     "total": 141,
     "commercial": 113,
+    "asOf": "October 2026",
+    "closed": ["Khalapur"],
     "commercialListSource": "Plant Names and addresses Sep 26.xlsx"
   }
 }

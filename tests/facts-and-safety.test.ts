@@ -201,3 +201,30 @@ test("Infra Market is never named: dropped from documents and from replies", () 
   assert.equal(withoutInfraMarket("Nothing to change."), "Nothing to change.");
   assert.equal(withoutInfraMarket("RDC इंफ्रा मार्केट का हिस्सा है। अधिक जानकारी www.rdc.in पर।"), "अधिक जानकारी www.rdc.in पर।");
 });
+
+test("plant facts: dated, closed plants left out of the facts and of retrieval", async () => {
+  const { factsOfRecord } = await import("../src/lib/facts");
+  const { withoutClosedPlants } = await import("../src/lib/knowledge/retrieval");
+  const text = factsOfRecord();
+  assert.match(text, /As of October 2026/);
+  assert.match(text, /Mumbai \(10\): Deonar, Kalyan, Kashimira, Mankoli, Pallava/);
+  const kept = withoutClosedPlants([
+    { content: "RDC commercial ready-mix concrete plant: Khalapur, Mumbai (plant name MUM-Khalapur)" },
+    { content: "RDC commercial ready-mix concrete plant: Deonar, Mumbai (plant name MUM-Deonar)" },
+  ]);
+  assert.equal(kept.length, 1);
+  assert.match(kept[0].content, /Deonar/);
+});
+
+test("a reply that refers to WhatsApp is forwarded; the rest are not", async () => {
+  const { refersToWhatsApp, forwardMail, forwardIfReferred } = await import("../src/lib/support/forwardToCustomerCare");
+  assert.equal(refersToWhatsApp("Please message RDC Tara on WhatsApp at +91 86579 40541."), true);
+  assert.equal(refersToWhatsApp("RDC Tara को व्हाट्सएप करें"), true);
+  assert.equal(refersToWhatsApp("Hello! How can I assist you today?"), false);
+  const mail = forwardMail("customercare@rdc.in", { question: "Where is my order?", reply: "Message WhatsApp.", askedBy: "a@rdc.in", language: "en", sessionId: "s1" });
+  assert.equal(mail.to, "customercare@rdc.in");
+  assert.equal(mail.replyTo, "a@rdc.in");
+  assert.match(mail.text, /Where is my order\?[\s\S]*Message WhatsApp\./);
+  delete process.env.TARA_FORWARD_TO; // off without it: nothing to send, no error
+  await forwardIfReferred({ question: "q", reply: "WhatsApp", language: "en", sessionId: "s" });
+});

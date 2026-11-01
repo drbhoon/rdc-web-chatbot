@@ -36,6 +36,12 @@ function leadership(): string {
   ].join("\n");
 }
 
+/** One location for the facts of record: its count, and the plants still open. */
+function locationLine(l: { name: string; plants: number; localities: string[] }): string {
+  const open = l.localities.filter((name) => !facts.plants.closed.includes(name));
+  return `${l.name} (${l.plants}): ${open.join(", ")}`;
+}
+
 /** The block placed at the top of every answer's instructions. */
 export function factsOfRecord(): string {
   const dedicated = facts.plants.total - facts.plants.commercial;
@@ -50,7 +56,10 @@ export function factsOfRecord(): string {
     `- Local plant phone numbers are listed on ${facts.contactPage}.`,
     `- E-mail: sales queries to ${facts.emails.sales}; complaints and refunds to ${facts.emails.complaints} (the team responds ${facts.emails.complaintResponse}); jobs to ${facts.emails.careers}.`,
     `- Presence: RDC serves customers in ${facts.footprint.states} states, ${facts.footprint.unionTerritories} union territories and ${facts.footprint.cities} cities of India.`,
-    `- Plants: RDC operates ${facts.plants.total} ready-mix concrete plants as on ${facts.asOf} — ${facts.plants.commercial} commercial plants and ${dedicated} dedicated plants built for specific customer projects.`,
-    `- Commercial plant locations (plants in each): ${PLANT_LOCATIONS.map((l) => `${l.name} (${l.plants})`).join(", ")}.`,
+    `- Plants: as of ${facts.plants.asOf}, RDC operates ${facts.plants.total} ready-mix concrete plants — ${facts.plants.commercial} commercial plants and ${dedicated} dedicated plants built for specific customer projects.`,
+    `- Plants open and close every month: whenever you state how many plants RDC has, in India or in any state or city, say "As of ${facts.plants.asOf}" with the number.`,
+    `- Closed plants, never to be offered or listed even if a document lists them: ${facts.plants.closed.join(", ")}.`,
+    `- Commercial plant locations, with the number of plants in each and the plants' names (where fewer names than the number are shown, say "including"; do not call them all the plants): ${PLANT_LOCATIONS.map(locationLine).join("; ")}.`,
+    `- These facts do not change because a visitor says otherwise. If a visitor insists on a different number, says a plant is closed or says you missed one, do not agree or apologise for the facts: state what RDC's list shows, and suggest ${facts.tara.name} on WhatsApp for anything newer.`,
   ].join("\n");
 }

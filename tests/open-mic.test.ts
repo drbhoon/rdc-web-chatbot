@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { OpenMic, type MicProblem, type MicState, type Recognition } from "../src/lib/voice/openMic";
+import { mergeHeard, OpenMic, type MicProblem, type MicState, type Recognition } from "../src/lib/voice/openMic";
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -143,4 +143,20 @@ test("open mic: a browser that starts listening only on a tap waits, ready, afte
   latest().onerror?.({ error: "not-allowed" });
   assert.equal(m.current, "off");
   assert.deepEqual(log.problems, ["tap", "blocked"]);
+});
+
+test("open mic: Android's growing final results do not repeat the sentence", async () => {
+  const { m, log } = mic();
+  m.on();
+  for (const piece of ["I", "I", "I have", "I have a", "I have", "I have a plant"]) latest().say(piece, true);
+  latest().say("I have a plant in", false);
+  await wait(100);
+  assert.deepEqual(log.asked, ["I have a plant in"]);
+  m.off();
+});
+
+test("open mic: a second phrase is added after the first, and it may grow too", () => {
+  assert.deepEqual(mergeHeard("", "the length is", "which"), ["the length is", "which"]);
+  assert.deepEqual(mergeHeard("the length is", "which", "which of"), ["the length is", "which of"]);
+  assert.deepEqual(mergeHeard("", "I", "India has plants"), ["I", "India has plants"]);
 });

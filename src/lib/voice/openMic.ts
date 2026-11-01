@@ -65,10 +65,27 @@ export function browserRecognition(): Recognition | null {
   return Ctor ? new Ctor() : null;
 }
 
+/**
+ * Adds a final result to what was heard. Android Chrome sends a growing sentence
+ * as a series of final results ("I", "I have", "I have a"), so appending each
+ * wrote "I I have I have a". A result that grows or repeats the latest one
+ * takes its place; anything else starts a new piece. Returns [earlier, latest].
+ */
+export function mergeHeard(earlier: string, latest: string, text: string): [string, string] {
+  const grows = (longer: string, shorter: string) => {
+    const [a, b] = [longer.toLowerCase(), shorter.toLowerCase()];
+    return a === b || a.startsWith(`${b} `);
+  };
+  if (!latest || grows(text, latest)) return [earlier, text];
+  if (grows(latest, text)) return [earlier, latest];
+  return [`${earlier} ${latest}`.trim(), text];
+}
+
 export class OpenMic {
   private state: MicState = "off";
   private recognition: Recognition | null = null;
   private committed = "";
+  private latest = "";
   private interim = "";
   private heardAny = false;
   private sendTimer: ReturnType<typeof setTimeout> | null = null;
@@ -103,7 +120,7 @@ export class OpenMic {
   /** Turn the mic off. */
   off(): void {
     this.clearTimers();
-    this.committed = this.interim = "";
+    this.committed = this.latest = this.interim = "";
     this.halt();
     this.setState("off");
   }
@@ -131,7 +148,7 @@ export class OpenMic {
   }
 
   private listen(): void {
-    this.committed = this.interim = "";
+    this.committed = this.latest = this.interim = "";
     this.setState("listening");
     this.armQuietTimer();
     this.startRecognition();
@@ -182,11 +199,11 @@ export class OpenMic {
       const result = event.results[i];
       const text = result[0].transcript.trim();
       if (!text) continue;
-      if (result.isFinal) this.committed = `${this.committed} ${text}`.trim();
+      if (result.isFinal) [this.committed, this.latest] = mergeHeard(this.committed, this.latest, text);
       else interim = `${interim} ${text}`.trim();
     }
     this.interim = interim;
-    const sofar = `${this.committed} ${this.interim}`.trim();
+    const sofar = this.heardSoFar();
     if (!sofar) return;
     this.heardAny = true;
     this.quickEnds = 0;
@@ -197,10 +214,14 @@ export class OpenMic {
     this.sendTimer = setTimeout(() => this.flush(), this.pauseMs);
   }
 
+  private heardSoFar(): string {
+    return mergeHeard(this.committed, this.latest, this.interim || this.latest).filter(Boolean).join(" ");
+  }
+
   private flush(): void {
     this.sendTimer = null;
-    const text = `${this.committed} ${this.interim}`.trim();
-    this.committed = this.interim = "";
+    const text = this.heardSoFar();
+    this.committed = this.latest = this.interim = "";
     if (!text || this.state !== "listening") return;
     this.pause();
     this.options.onUtterance(text);
