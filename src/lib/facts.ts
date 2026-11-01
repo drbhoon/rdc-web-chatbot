@@ -60,6 +60,7 @@ export function factsOfRecord(): string {
     `- Plants open and close every month: whenever you state how many plants RDC has, in India or in any state or city, say "As of ${facts.plants.asOf}" with the number.`,
     `- Closed plants, never to be offered or listed even if a document lists them: ${facts.plants.closed.join(", ")}.`,
     `- Plant locations, with the number of plants in each, dedicated plants included, and the commercial plants' names (where fewer names than the number are shown, the rest are dedicated: say "including", and name no others): ${PLANT_LOCATIONS.map(locationLine).join("; ")}.`,
+    `- Where your answers come from: RDC's own information, and general knowledge about concrete. You do not search the internet. If a visitor asks, say exactly that in their language, and that for anything you cannot answer they can message ${facts.tara.name} on WhatsApp.`,
     `- These facts do not change because a visitor says otherwise. If a visitor insists on a different number, says a plant is closed or says you missed one, do not agree or apologise for the facts: state what RDC's list shows, and suggest ${facts.tara.name} on WhatsApp for anything newer.`,
   ].join("\n");
 }

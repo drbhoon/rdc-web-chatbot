@@ -23,7 +23,7 @@ const EMPLOYEE_INTENT_PATTERN =
 const EMPLOYEE_NEGATION_PATTERN =
   /\b(?:do\s+not|don't|dont|no|not)\s+(?:want|need)?\s*(?:any\s+)?(?:employee|employees|emp|staff)\b|डॉन'?ट|डोंट|नहीं\s+चाहिए|मत\s+दो|एम्पलाई\s+नहीं|कर्मचारी\s+नहीं/i;
 const COMPANY_TOPIC_PATTERN =
-  /\b(?:rdc|rdc concrete|rmc|concrete|company|business|vision|customer connect|rdctrak|qms|erp|deeksha|my setu)\b|आरडीसी|आर\s*डी\s*सी|कंकरीट|कॉन्क्रीट|कंपनी|बिजनेस|विजन/i;
+  /\b(?:rdc|rdc concrete|rmc|concrete|company|business|vision|customer connect|rdctrak|qms|erp|deeksha|my setu)\b|आरडीसी|आर\s*डी\s*सी|कंकरीट|कंक्रीट|कांक्रीट|कॉन्क्रीट|रेडी\s*मिक्स|सीमेंट|प्लांट|कंपनी|बिजनेस|विजन/i;
 const OTP_PATTERN = /^\s*(\d{6})\s*[.。।,!?]?\s*$/;
 
 const MAX_EMPLOYEE_LOOKUPS_PER_CODE = 10;
@@ -46,7 +46,15 @@ const NOT_NAME_WORDS = new Set([
   "benefit", "benefits", "welfare", "policy", "policies", "initiative", "initiatives", "leave", "leaves",
   "salary", "salaries", "training", "safety", "strength", "count", "engagement", "details", "detail",
   "information", "info", "data", "insurance", "transfer", "transfers", "promotion", "promotions", "rules",
+  // Everyday words: "… के बारे में" follows a whole spoken sentence as easily as a
+  // name, and the sentence was read back to the visitor as a person (2026-11-01).
+  "आप", "आपके", "आपको", "आपका", "आपकी", "मैं", "मेरे", "मेरा", "हम", "हमें", "हमारे", "यह", "वह", "यही", "वही", "जो", "कि",
+  "क्या", "कैसे", "कहां", "है", "हैं", "हो", "से", "में", "पर", "को", "ने", "या", "और", "भी", "नहीं", "कर", "बता", "सकते", "सकती",
+  "नेट", "इंटरनेट", "इनफॉरमेशन", "इन्फॉर्मेशन", "जानकारी",
+  "aap", "hum", "humein", "jo", "se", "ya", "aur", "bhi", "you", "we", "net", "internet",
 ]);
+// No one's name is longer than this.
+const MAX_NAME_WORDS = 5;
 
 export interface EmployeeDirectoryResult {
   handled: boolean;
@@ -244,7 +252,7 @@ function isLikelyEmployeeName(name: string): boolean {
 
   const tokens = normalized.split(" ").filter(Boolean);
   if (tokens.some((token) => NOT_NAME_WORDS.has(token))) return false;
-  return tokens.length >= 2;
+  return tokens.length >= 2 && tokens.length <= MAX_NAME_WORDS;
 }
 
 function isPossibleSingleEmployeeName(name: string): boolean {

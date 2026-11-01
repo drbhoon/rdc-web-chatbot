@@ -150,6 +150,18 @@ test("asking for employees' details without a name gets the e-mail code offer; q
     assert.equal(extractEmployeeName(topic), null, topic);
   }
   assert.equal(extractEmployeeName("Tell me about employee Kanhaiya"), "Kanhaiya");
+  // A spoken sentence ending in "के बारे में" is not a person (RDC, 2026-11-01).
+  for (const sentence of [
+    "क्या आप वही इनफॉरमेशन बता सकते हैं जो कि आपके पास है जो आप नेट से ढूंढ के भी हमें कंक्रीट के बारे में बता सकते हैं",
+    "क्या आप नेट से ढूंढ के भी हमें सड़क के बारे में बता सकते हैं",
+    "आप जो जानते हैं वह इंटरनेट के बारे में है",
+    "मुझे सीमेंट के बारे में बताइए",
+    "रेडी मिक्स के बारे में बताइए",
+    "one two three four five six के बारे में",
+  ]) assert.equal(extractEmployeeName(sentence), null, sentence);
+  assert.equal(extractEmployeeName("आशा राव के बारे में बताइए"), "आशा राव");
+  assert.equal(extractEmployeeName("मुझे आशा राव के बारे में बताइए"), "आशा राव");
+  assert.equal(extractEmployeeName("Tell me about Mohammad Adnan Khan"), "Mohammad Adnan Khan");
   // Asked on 2026-10-18 and missed: "in rdc company" and the title "Mr.".
   assert.equal(extractEmployeeName("Who is Mr. Prathiush in rdc company"), "Prathiush");
   assert.equal(extractEmployeeName("Tell me about Dr Asha Example"), "Asha Example");
