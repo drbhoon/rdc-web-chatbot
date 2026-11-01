@@ -38,22 +38,23 @@ const ZERO: HeadPose = { tilt: 0, rise: 0, turn: 0 };
 // degrees in conversation; more than this reads as a cartoon.
 export const LIMITS = { tilt: 5, rise: 0.02, turn: 0.012, nod: 0.01, pitch: 0.035 };
 
-// The listening nod: the head tips forward (pitch) and dips a little (drop),
-// quicker down than up, then comes back. Tuned on RDC's tests: a 1.5% pitch
-// with a lean was missed (2026-10-10); 3.7% in all was too pronounced
-// (2026-10-11, about 4% of the avatar's height on screen). At most about 2%,
-// and no two alike: identical nods looked mechanical (2026-11-01).
+// The listening nod: the head bends forward (pitch) with a small tilt to one
+// side, then comes back and settles. Tuned on RDC's tests: a 1.5% pitch with a
+// lean was missed (2026-10-10); 3.7% in all was too pronounced (2026-10-11,
+// about 4% of the avatar's height on screen). At most about 2%, and no two
+// alike: identical nods looked mechanical (2026-11-01). The timing follows
+// RDC's reference clip (2026-11-01): about 0.33 s down, quick back, slow settle.
 const ACK_SECONDS: [number, number] = [0.95, 1.35];
-const ACK_PITCH = 0.017;
-const ACK_DROP = 0.004;
+const ACK_PITCH = 0.021;
 const ACK_SCALE: [number, number] = [0.6, 1.05];
+const ACK_TILT: [number, number] = [0.4, 1.1];
 // Most nods have no blink; a blink on every one looked staged.
 const NOD_BLINK_CHANCE = 0.3;
 // A blink at the bottom of a nod, only a little slower than an ordinary one:
 // a slow blink lingers on the half-closed frame, which looks smudged.
 const NOD_BLINK_SCALE = 1.15;
 // Where in the nod the head is lowest (fraction of its length).
-const ACK_BOTTOM = 0.4;
+const ACK_BOTTOM = 0.3;
 
 class Spring {
   value = 0;
@@ -95,6 +96,7 @@ export class AvatarMotion {
   private ackStartedAt = -10;
   private ackScale = 1;
   private ackSeconds = 1.1;
+  private ackTilt = 0;
   /** 0 = the usual small movements; 1 = perfectly still apart from the nod (listening). */
   private readonly still = new Spring();
 
@@ -132,9 +134,9 @@ export class AvatarMotion {
   }
 
   /**
-   * The "I understand" nod of someone listening: the head tips forward and
-   * comes back, with nothing else moving (RDC's reference: an AI presenter
-   * listening, 2026-10-10). Call it while the visitor is asking; calls during
+   * The "I understand" nod of someone listening: the head bends forward and
+   * comes back, with nothing else moving but a small tilt that is part of the
+   * nod (RDC's reference: an AI presenter listening, 2026-10-10). Call it while the visitor is asking; calls during
    * a nod already under way are ignored. It never repeats by itself: she nods
    * at someone talking, not at silence with the mic on.
    */
@@ -145,6 +147,7 @@ export class AvatarMotion {
     this.ackSeconds = this.between(...ACK_SECONDS);
     this.ackUntil = t + this.ackSeconds;
     this.ackScale = this.between(...ACK_SCALE);
+    this.ackTilt = (this.random() < 0.5 ? -1 : 1) * this.between(...ACK_TILT);
     this.gesture = ZERO;
     this.gestureEndsAt = t;
     this.nextGestureAt = this.ackUntil + this.between(1, 2.5);
@@ -153,12 +156,14 @@ export class AvatarMotion {
     if (blink) this.slowBlinkAt = t + this.ackSeconds * ACK_BOTTOM - 0.06 * NOD_BLINK_SCALE;
   }
 
-  /** 0..1: how far down the nod the head is — eased, quicker down than up. */
+  /** 0..1: how far down the nod the head is: quickly down, quickly most of the way back, then a slow settle. */
   private ackDepth(): number {
     const s = (this.t - this.ackStartedAt) / this.ackSeconds;
     if (s <= 0 || s >= 1) return 0;
     const ease = (x: number) => x * x * (3 - 2 * x);
-    return s < ACK_BOTTOM ? ease(s / ACK_BOTTOM) : 1 - ease((s - ACK_BOTTOM) / (1 - ACK_BOTTOM));
+    if (s < ACK_BOTTOM) return ease(s / ACK_BOTTOM);
+    const back = (s - ACK_BOTTOM) / (1 - ACK_BOTTOM);
+    return (1 - back) ** 5 * (1 + 5 * back);
   }
 
   private pickGesture(mode: AvatarMode): void {
@@ -262,13 +267,14 @@ export class AvatarMotion {
     const microTurn = lively * 0.0014 * Math.sin(t * 0.29 + 2);
 
     const sinceNod = t - this.nodStartedAt;
-    const depth = this.ackDepth() * this.ackScale;
-    const nod = (sinceNod < this.nodLength ? this.nodAmp * Math.sin((Math.PI * sinceNod) / this.nodLength) : 0) + ACK_DROP * depth;
+    const nodDepth = this.ackDepth();
+    const depth = nodDepth * this.ackScale;
+    const nod = sinceNod < this.nodLength ? this.nodAmp * Math.sin((Math.PI * sinceNod) / this.nodLength) : 0;
 
     const breathPeriod = speaking ? 3.4 : 4.4;
     const clamp = (v: number, limit: number) => Math.max(-limit, Math.min(limit, v));
     return {
-      tilt: clamp(tilt + microTilt, LIMITS.tilt),
+      tilt: clamp(tilt + microTilt + this.ackTilt * nodDepth, LIMITS.tilt),
       rise: clamp(rise + microRise, LIMITS.rise),
       turn: clamp(turn + microTurn, LIMITS.turn),
       nod: clamp(nod, LIMITS.nod),

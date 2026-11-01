@@ -21,8 +21,14 @@ const NECK_PIVOT = [0.505, 0.53];
 const HEAD_UNTIL = 0.47; // the chin: the head moves fully above this
 const BODY_FROM = 0.6; // the collar: nothing below this moves with the head
 const EYES = { left: 0.31, right: 0.69, top: 0.21, bottom: 0.35 };
-const EYE_LEVEL = 0.29;
-const GRID = 48;
+// For the bend of a nod.
+const FACE_CENTRE = 0.51;
+const CROWN = 0.02;
+const BROWS = 0.245;
+const LIPS = 0.413;
+const CHIN = 0.5;
+const UNDER_CHIN = 0.54;
+const GRID = 72;
 const TEXTURE_SIZE = 1024;
 
 const FRAMES = ["saathi-avatar-v2.png", "saathi-avatar-speak-soft.png", "saathi-avatar-speak-open.png", "saathi-avatar-blink.png"];
@@ -48,12 +54,17 @@ void main() {
   // Work in units of image height, y down.
   vec2 p = vec2(a_uv.x * u_aspect, a_uv.y);
   float w = 1.0 - smoothstep(${HEAD_UNTIL.toFixed(3)}, ${BODY_FROM.toFixed(3)}, a_uv.y);
-  // A forward nod seen from the front: the whole head goes down, the eyes and
-  // nose a little more than the crown and chin. Keeping the crown and chin
-  // nearly fixed squeezed the face like rubber (2026-11-01). Peaks at eye level;
-  // nothing below the collar moves, and the image's top edge stays put.
-  float pitchShape = smoothstep(0.0, 0.06, a_uv.y) * mix(0.55, 1.0, smoothstep(0.0, ${EYE_LEVEL.toFixed(3)}, a_uv.y)) * (1.0 - 0.25 * smoothstep(${EYE_LEVEL.toFixed(3)}, ${HEAD_UNTIL.toFixed(3)}, a_uv.y)) * w;
-  p.y += u_pitch * pitchShape;
+  // A forward nod is a bend, not a slide (moving the whole head down looked like
+  // the neck being pulled, 2026-11-01). As in RDC's reference clip, brows to lips
+  // move as one piece; the forehead stretches, as it does when it tips forward;
+  // the chin comes down a little less and stops at the neck, which stays put.
+  // The middle of the face moves more than its sides and the hair: that
+  // difference is what reads as the head turning.
+  float bendDown = (0.15 + 0.85 * smoothstep(${CROWN.toFixed(3)}, ${BROWS.toFixed(3)}, a_uv.y))
+                 * (1.0 - 0.25 * smoothstep(${LIPS.toFixed(3)}, ${CHIN.toFixed(3)}, a_uv.y))
+                 * (1.0 - smoothstep(${CHIN.toFixed(3)}, ${UNDER_CHIN.toFixed(3)}, a_uv.y));
+  float bendAcross = mix(1.0, 0.25, smoothstep(0.1, 0.3, abs(a_uv.x - ${FACE_CENTRE.toFixed(3)})));
+  p.y += u_pitch * bendDown * bendAcross;
   p = rotate(p, vec2(u_pivot.x * u_aspect, u_pivot.y), u_tilt * w);
   p += vec2(u_head.x, u_head.y) * w;
   // Breathing lifts the chest and head; the bottom edge stays put.
