@@ -1,0 +1,10 @@
+[
+  {
+    "question": "HOW TO TRACK TM ON MAP IF IM COSTOMER",
+    "language": "en",
+    "answer": "To track the live status of your transit mixers (TMs) on a map, please message RDC Tara \"Track my order\" on WhatsApp at +91 86579 40541. RDC Tara will send you a unique tracking link for your site, which stays the same for that site. The link shows all the transit mixers dispatched to your site, with each driver's contact details.",
+    "replaces": [
+      "To track the transit mixer (TM) on a map, you can use the RDCTrak system. This allows you to see the live location of the TM on Google Maps, including details such as TM number, idle time, and percentage fill of each TM. For real-time tracking and updates on your orders, please message RDC Tara on WhatsApp at +91 86579 40541."
+    ]
+  }
+]

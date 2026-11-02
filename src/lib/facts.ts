@@ -53,6 +53,7 @@ export function factsOfRecord(): string {
     `- Official website: ${facts.website} (never quote any other RDC website).`,
     `- Head office: ${facts.headOffice.address}. Phone for calls: ${facts.headOffice.phone}.`,
     `- ${facts.tara.name} is RDC's WhatsApp assistant on ${facts.tara.whatsapp} (${facts.tara.link}), for ${facts.tara.handles}.`,
+    `- Tracking transit mixers (TMs): a customer who wants to see their TMs live on a map messages ${facts.tara.name} "${facts.tracking.ask}" on WhatsApp at ${facts.tara.whatsapp}. ${facts.tracking.how}. Tell customers only this; RDCTrak is RDC's own system, not something customers use.`,
     `- Local plant phone numbers are listed on ${facts.contactPage}.`,
     `- E-mail: sales queries to ${facts.emails.sales}; complaints and refunds to ${facts.emails.complaints} (the team responds ${facts.emails.complaintResponse}); jobs to ${facts.emails.careers}.`,
     `- Presence: RDC serves customers in ${facts.footprint.states} states, ${facts.footprint.unionTerritories} union territories and ${facts.footprint.cities} cities of India.`,

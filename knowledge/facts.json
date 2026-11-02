@@ -19,6 +19,10 @@
     "complaintResponse": "within 24 hours",
     "careers": "careers@rdc.in"
   },
+  "tracking": {
+    "ask": "Track my order",
+    "how": "RDC Tara sends the customer a unique tracking link for their site, which stays the same for that site and shows all the transit mixers dispatched to it, with each driver's contact details"
+  },
   "name": {
     "origin": "Research & Development Corporation, of Singapore, RDC's founding partner",
     "today": "ReaDymix Concrete",
